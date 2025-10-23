@@ -53,7 +53,7 @@ video.style.width = '200px';
   videoTex.minFilter = THREE.LinearFilter;
   videoTex.magFilter = THREE.LinearFilter;
   videoTex.generateMipmaps = false;
-  videoTex.encoding = THREE.sRGBEncoding;
+  //videoTex.encoding = THREE.sRGBEncoding;
 
   const geom = new THREE.SphereGeometry(500, 64, 64);
   geom.scale(-1, 1, 1);

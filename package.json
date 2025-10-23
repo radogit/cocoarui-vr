@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "start": "parcel src/index.html --https --cert localhost+2.pem --key localhost+2-key.pem --port 1235 --open",
-    "build": "parcel build src/index.html --public-url ./ && cp -R public/* dist/",    "deploy": "npm run build && gh-pages -d dist && echo \"deployed to: https://radogit.github.io/cocoarui-vr/\" && echo \"check status on: https://github.com/radogit/cocoarui-vr/deployments\"",
+    "build": "parcel build src/index.html --public-url ./",
+    "deploy": "npm run build && gh-pages -d dist && echo \"deployed to: https://radogit.github.io/cocoarui-vr/\" && echo \"check status on: https://github.com/radogit/cocoarui-vr/deployments\"",
     "clean": "rm -rf dist .parcel-cache"
   },
   "dependencies": {

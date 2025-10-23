@@ -11,14 +11,14 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@parcel/transformer-raw": "^2.16.0",
     "gh-pages": "^6.3.0",
     "parcel": "^2.16.0"
   },
   "targets": {
-  "default": {
-    "publicUrl": "./",
-    "distDir": "dist"
+    "default": {
+      "publicUrl": "./",
+      "distDir": "dist"
     }
   }
-
 }

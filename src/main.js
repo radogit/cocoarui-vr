@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { DeviceOrientationControls } from './controls/DeviceOrientationControls.js';
 import { StereoEffect } from 'three/examples/jsm/effects/StereoEffect.js';
+import videoFile from './assets/city_safe.mp4';
 
 // ---------- DOM ----------
 const ui = document.getElementById('ui');
@@ -28,9 +29,11 @@ function init() {
   effect.setSize(window.innerWidth, window.innerHeight);
 
   // ---------- 360 VIDEO ----------
-  video = document.createElement('video');
-  video.src = new URL('./assets/city_safe.mp4', import.meta.url);
+//   video = document.createElement('video');
+//   video.src = './assets/city_safe.mp4',
   //video.src = 'https://raw.githubusercontent.com/aframevr/assets/master/360-video-boilerplate/video/city.mp4';
+  video = document.createElement('video');
+  video.src = videoFile;
   video.crossOrigin = 'anonymous';
   video.loop = true;
   video.muted = true;

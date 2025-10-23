@@ -5,3 +5,4 @@ dist/
 .DS_Store
 README_dev.txt
 ignore
+.parcel-cache

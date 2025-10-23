@@ -34,7 +34,7 @@ function init() {
   //video.src = 'https://raw.githubusercontent.com/aframevr/assets/master/360-video-boilerplate/video/city.mp4';
   video = document.createElement('video');
   video.src = videoFile;
-  video.crossOrigin = 'anonymous';
+  //video.crossOrigin = 'anonymous';
   video.loop = true;
   video.muted = true;
   video.playsInline = true;

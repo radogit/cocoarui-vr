@@ -1,0 +1,14 @@
+{
+  "name": "cardboardvr_experiment",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "parcel src/index.html --open",
+    "build": "parcel build src/index.html --public-url ./"
+  },
+  "dependencies": {
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "parcel": "^2.16.0"
+  }
+}

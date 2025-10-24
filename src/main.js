@@ -178,6 +178,9 @@ Object.assign(video.style, {
 }
 
 async function enterVR() {
+    
+  await goFullscreen();
+
   try {
     if (
       typeof DeviceOrientationEvent !== "undefined" &&
@@ -321,16 +324,18 @@ function playpause() {
 
 
 async function goFullscreen() {
+  const el = document.documentElement; // entire document
   try {
-    const el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen) {
+    if (el.requestFullscreen) {
       await el.requestFullscreen({ navigationUI: "hide" });
-      await safePlay;
+    } else if (el.webkitRequestFullscreen) {
+      await el.webkitRequestFullscreen(); // older iOS Safari
     }
   } catch (e) {
-    console.warn("Fullscreen failed", e);
+    console.warn("Fullscreen failed:", e);
   }
 }
+
 
 async function safePlay() {
   try {
@@ -343,3 +348,14 @@ async function safePlay() {
     console.warn("Video play retry failed:", e);
   }
 }
+
+// --- auto-enter fullscreen in landscape on Safari ---
+window.addEventListener("orientationchange", async () => {
+  if (Math.abs(window.orientation) === 90) {
+    try {
+      await goFullscreen();
+    } catch (e) {
+      console.warn("Fullscreen request failed:", e);
+    }
+  }
+});

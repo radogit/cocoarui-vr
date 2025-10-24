@@ -1,0 +1,8 @@
+{
+  "name": "My Awesome App",
+  "short_name": "App",
+  "start_url": "/?string=welcome",
+  "display": "standalone",
+  "background_color": "#0000ff",
+  "theme_color": "#ff0000"
+}

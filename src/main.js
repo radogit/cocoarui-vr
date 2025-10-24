@@ -13,10 +13,22 @@ const playPauseBtn = document.getElementById("playpause");
 let scene, camera, renderer, effect, controls;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
+let stopUpdates = false;
+
 
 init();
 
 function init() {
+  // --- keep video alive on PWA focus / rotation ---
+    document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) safePlay();
+    });
+    window.addEventListener("focus", safePlay);
+    window.addEventListener("orientationchange", () => {
+    setTimeout(safePlay, 500);
+    });
+
+
   scene = new THREE.Scene();
 
   camera = new THREE.PerspectiveCamera(
@@ -26,10 +38,20 @@ function init() {
     2000
   );
 
+  controls = new DeviceOrientationControls(camera, true);
+  
+
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.max(1, window.devicePixelRatio / 1.25));
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
+//   renderer.domElement.style.position = "fixed";
+  renderer.domElement.style.inset = "0";
+  renderer.domElement.style.width = "100vw";
+  renderer.domElement.style.height = "100vh";
+  renderer.domElement.style.display = "block";
+  renderer.domElement.style.touchAction = "none"; // prevent pull-to-refresh
+
 
   effect = new StereoEffect(renderer);
   effect.setSize(window.innerWidth, window.innerHeight);
@@ -90,6 +112,22 @@ Object.assign(video.style, {
   sphere = new THREE.Mesh(geom, mat);
   scene.add(sphere);
 
+    // --- iOS standalone PWA orientation correction ---
+    const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone;
+
+    if (isStandalone) {
+    // sphere.rotation.order = "YXZ";
+    sphere.rotation.z = -Math.PI / 2; // rotate 90° clockwise
+    sphere.rotation.x = Math.PI; // rotate
+    // sphere.rotation.x = Math.PI / 2; // rotate 90° clockwise
+    console.log("Applied PWA orientation fix (sphere rotated)");
+    } else {
+        sphere.rotation.y = Math.PI; // rotate
+    }
+
+
   //   // ------- wireframe helper -------
   //   const wire = new THREE.WireframeGeometry(geom);
   //   const wireMat = new THREE.LineBasicMaterial({ color: 0xff00ff });
@@ -108,8 +146,6 @@ Object.assign(video.style, {
   reticle.position.z = -1;
   camera.add(reticle);
   scene.add(camera);
-
-  controls = new DeviceOrientationControls(camera, true);
 
   enterBtn.addEventListener("click", enterVR);
   recenterBtn.addEventListener("click", recenter);
@@ -183,7 +219,7 @@ async function enterVR() {
     ui.style.display = "none";
     hud.hidden = false;
 
-    //startTextureUpdates();  // <- drive canvas & texture from video frames
+    startTextureUpdates();  // <- drive canvas & texture from video frames
     animate();
     setTimeout(recenter, 100);
   } catch (err) {
@@ -215,11 +251,58 @@ function animate() {
   effect.render(scene, camera);
 }
 
-function onResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  effect.setSize(window.innerWidth, window.innerHeight);
+function startTextureUpdates() {
+  stopUpdates = false;
+
+  const hasRVFC = typeof video.requestVideoFrameCallback === "function";
+
+  const drawFrame = () => {
+    if (stopUpdates) return;
+
+    if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
+      if (visibleCanvas.width !== video.videoWidth || visibleCanvas.height !== video.videoHeight) {
+        visibleCanvas.width = video.videoWidth;
+        visibleCanvas.height = video.videoHeight;
+      }
+      visibleCtx.drawImage(video, 0, 0, visibleCanvas.width, visibleCanvas.height);
+      panoTex.needsUpdate = true;
+    }
+
+    if (!hasRVFC) {
+      // fallback to rAF if RVFC not available
+      requestAnimationFrame(drawFrame);
+    }
+  };
+
+  if (hasRVFC) {
+    const loop = () => {
+      if (stopUpdates) return;
+      video.requestVideoFrameCallback(() => {
+        drawFrame();
+        loop();
+      });
+    };
+    loop();
+  } else {
+    drawFrame();
+  }
 }
+
+function stopTextureUpdates() {
+  stopUpdates = true;
+}
+
+
+
+function onResize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  effect.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
 
 function recenter() {
   controls.alphaOffset = -camera.rotation.y;
@@ -251,11 +334,12 @@ async function goFullscreen() {
 
 async function safePlay() {
   try {
-    if (video.paused) {
+    if (video && video.paused) {
       const p = video.play();
       if (p && typeof p.then === "function") await p;
     }
   } catch (e) {
     // ignore; user may need to tap again if autoplay is blocked
+    console.warn("Video play retry failed:", e);
   }
 }

@@ -6,3 +6,4 @@ dist/
 README_dev.txt
 ignore
 .parcel-cache
+*.pem

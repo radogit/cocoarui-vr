@@ -115,6 +115,32 @@ Object.assign(video.style, {
   sphere = new THREE.Mesh(geom, mat);
   scene.add(sphere);
 
+
+    // --- 3D reference sphere (red) ---
+    const refGeometry = new THREE.SphereGeometry(5, 32, 32); // radius 5 units
+    const refMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const refSphere = new THREE.Mesh(refGeometry, refMaterial);
+
+    // place it slightly above horizon and to the left
+    // (e.g. 30° to the left, 10° up, 400 units away from camera center)
+    const distance = 400;
+    const azimuth = THREE.MathUtils.degToRad(-30); // left/right
+    const elevation = THREE.MathUtils.degToRad(10); // up/down
+    refSphere.position.set(
+    Math.sin(azimuth) * Math.cos(elevation) * distance,
+    Math.sin(elevation) * distance,
+    -Math.cos(azimuth) * Math.cos(elevation) * distance
+    );
+
+    scene.add(refSphere);
+
+
+
+
+
+
+
+
     // --- iOS standalone PWA orientation correction ---
     const isStandalone =
     window.matchMedia("(display-mode: standalone)").matches ||
@@ -405,3 +431,5 @@ window.addEventListener("orientationchange", () => {
     window.scrollTo(0, 1); // tiny scroll to nudge Safari to hide bars
   }
 });
+
+

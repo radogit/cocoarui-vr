@@ -20,8 +20,33 @@
     html, body { 
         margin:0; padding:0; 
         height:100%; width:100%; 
-        overflow:hidden; background:#000; 
+        /* overflow:hidden;  */
+        background:#000; 
+        -webkit-text-size-adjust: 100%;
+        overscroll-behavior: contain; /* prevent rubber-band scrolling */
+        -webkit-overflow-scrolling: touch;
     }
+    html {
+        touch-action: manipulation; /* disable double-tap to zoom */
+        scrollbar-gutter: stable; /* prevent layout shift when scrollbars appear */
+        overflow-x: hidden;
+    }
+    #app-root {
+        position: absolute; /* not fixed → your button remains clickable */
+        left: 0; top: 0;
+        width: 100vw; height: 100vh; /* baseline */
+        z-index: 0;
+    }
+
+    /* Prefer the new dynamic viewport units when available */
+    @supports (height: 100dvh) {
+        #app-root { width: 100dvw; height: 100dvh; }
+    }
+    /* Fallback shim for old iOS: JS sets --vh to the true VisualViewport height */
+    #app-root[data-use-vh="1"] {
+        height: calc(var(--vh, 1vh) * 100);
+    }
+
     #ui {
       position:fixed; inset:0; display:grid; place-items:center;
       background:radial-gradient(ellipse at center, rgba(0,0,0,.7), rgba(0,0,0,.9));
@@ -39,7 +64,7 @@
       position:fixed; left:12px; bottom:12px; display:flex; gap:8px; z-index:10;
     }
     #hud button { opacity:.85; }
-    canvas {
+    canvas.webgl {
       display:block;
       width:100vw;
       height:100vh;
@@ -56,6 +81,11 @@
     </style>
   </head>
   <body>
+
+    <div id="app-root">
+        <!-- Three.js will append canvas here or you can place it inside -->
+    </div>
+
     <!-- First-tap UI (needed for iOS motion + video playback permissions) -->
     <div id="ui">
       <div class="panel">

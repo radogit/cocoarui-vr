@@ -10,6 +10,8 @@ const recenterBtn = document.getElementById("recenter");
 const fullscreenBtn = document.getElementById("fullscreen");
 const playPauseBtn = document.getElementById("playpause");
 
+const appRoot = document.getElementById('app-root');
+
 let scene, camera, renderer, effect, controls;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
@@ -44,7 +46,8 @@ function init() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.max(1, window.devicePixelRatio / 1.25));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  renderer.domElement.className = "webgl";
+  appRoot.appendChild(renderer.domElement);
 //   renderer.domElement.style.position = "fixed";
   renderer.domElement.style.inset = "0";
   renderer.domElement.style.width = "100vw";
@@ -178,10 +181,10 @@ Object.assign(video.style, {
 }
 
 async function enterVR() {
-    
-  await goFullscreen();
 
   try {
+    await goFullscreen();
+
     if (
       typeof DeviceOrientationEvent !== "undefined" &&
       typeof DeviceOrientationEvent.requestPermission === "function"
@@ -324,17 +327,19 @@ function playpause() {
 
 
 async function goFullscreen() {
-  const el = document.documentElement; // entire document
+  const el = document.documentElement; // or document.body
   try {
     if (el.requestFullscreen) {
       await el.requestFullscreen({ navigationUI: "hide" });
     } else if (el.webkitRequestFullscreen) {
-      await el.webkitRequestFullscreen(); // older iOS Safari
+      el.webkitRequestFullscreen();
     }
   } catch (e) {
-    console.warn("Fullscreen failed:", e);
+    console.warn("Fullscreen failed", e);
   }
 }
+
+
 
 
 async function safePlay() {
@@ -357,5 +362,46 @@ window.addEventListener("orientationchange", async () => {
     } catch (e) {
       console.warn("Fullscreen request failed:", e);
     }
+  }
+});
+
+function sizeToViewport() {
+  const vv = window.visualViewport;
+  const w = vv ? Math.round(vv.width)  : window.innerWidth;
+  const h = vv ? Math.round(vv.height) : window.innerHeight;
+
+  // Keep a CSS var for the fallback route (old iOS)
+  document.documentElement.style.setProperty('--vh', `${h / 100}px`);
+
+  // For old iOS that ignores dvh: mark the container to use the --vh calc
+  // Newer Safari will ignore the data-attr thanks to 100dvh @supports above.
+  if (!CSS.supports('height: 100dvh')) {
+    appRoot.setAttribute('data-use-vh', '1');
+  }
+
+  // Size Three without letting it also scale the DOM canvas; CSS controls pixels.
+  renderer.setSize(w, h, false);
+  effect.setSize(w, h);
+
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+sizeToViewport();
+
+window.addEventListener('resize', sizeToViewport, { passive: true });
+window.addEventListener('orientationchange', () => {
+  // give Safari a tick to settle the new bars, then recalc
+  setTimeout(sizeToViewport, 250);
+}, { passive: true });
+
+// Live updates when Safari collapses/expands chrome
+if (window.visualViewport) {
+  visualViewport.addEventListener('resize', sizeToViewport, { passive: true });
+  visualViewport.addEventListener('scroll', sizeToViewport,  { passive: true });
+}
+window.addEventListener("orientationchange", () => {
+  if (Math.abs(window.orientation) === 90) {
+    window.scrollTo(0, 1); // tiny scroll to nudge Safari to hide bars
   }
 });

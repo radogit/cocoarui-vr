@@ -7,4 +7,4 @@ README_dev.txt
 ignore
 .parcel-cache
 *.pem
-/src/assets/
+*.mp4

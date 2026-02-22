@@ -29,21 +29,42 @@ class DeviceOrientationControls extends EventDispatcher {
     };
 
     this.onScreenOrientationChangeEvent = () => {
-      this.screenOrientation = window.orientation || 0;
+      this.screenOrientation = this._getScreenOrientation();
     };
+
+    // Prefer Screen Orientation API; fallback to deprecated window.orientation (e.g. iOS Safari)
+    this._useScreenOrientationAPI =
+      typeof screen !== 'undefined' &&
+      screen.orientation &&
+      typeof screen.orientation.angle === 'number';
 
     this.connect();
   }
 
+  _getScreenOrientation() {
+    if (this._useScreenOrientationAPI && screen.orientation) {
+      return screen.orientation.angle;
+    }
+    return window.orientation || 0;
+  }
+
   connect() {
     this.onScreenOrientationChangeEvent(); // run once
-    window.addEventListener('orientationchange', this.onScreenOrientationChangeEvent);
+    if (this._useScreenOrientationAPI && screen.orientation) {
+      screen.orientation.addEventListener('change', this.onScreenOrientationChangeEvent);
+    } else {
+      window.addEventListener('orientationchange', this.onScreenOrientationChangeEvent);
+    }
     window.addEventListener('deviceorientation', this.onDeviceOrientationChangeEvent);
     this.enabled = true;
   }
 
   disconnect() {
-    window.removeEventListener('orientationchange', this.onScreenOrientationChangeEvent);
+    if (this._useScreenOrientationAPI && screen?.orientation) {
+      screen.orientation.removeEventListener('change', this.onScreenOrientationChangeEvent);
+    } else {
+      window.removeEventListener('orientationchange', this.onScreenOrientationChangeEvent);
+    }
     window.removeEventListener('deviceorientation', this.onDeviceOrientationChangeEvent);
     this.enabled = false;
   }

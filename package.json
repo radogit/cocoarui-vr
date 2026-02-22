@@ -2,7 +2,7 @@
   "name": "cardboardvr_experiment",
   "version": "1.0.0",
   "scripts": {
-    "start": "echo \"https://localhost:1235\" && parcel src/index.html --https --cert localhost+1.pem --key localhost+1-key.pem --port 1235",
+    "start": "echo \"https://localhost:1235\" && parcel src/index.html --https --cert localhost.pem --key localhost-key.pem --port 1235 --host 0.0.0.0",
     "build": "parcel build src/index.html --public-url ./",
     "deploy": "npm run build && gh-pages -d dist && echo \"deployed to: https://radogit.github.io/cocoarui-vr/\" && echo \"check status on: https://github.com/radogit/cocoarui-vr/deployments\"",
     "clean": "rm -rf dist .parcel-cache"

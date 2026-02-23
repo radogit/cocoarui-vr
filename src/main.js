@@ -17,6 +17,7 @@ let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
 const labelPlanes = []; // billboard labels, updated each frame to face camera
+const VIDEO_SPHERE_RADIUS = 500;
 
 /**
  * Parse markers from URL param. Format: markers=yaw,pitch,size|yaw,pitch,size|...
@@ -147,10 +148,11 @@ function createLabelMesh(text, radius, position, distance) {
  * Optional name: displayed as billboard label inside the sphere.
  */
 function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1, name }) {
+  const cappedDist = Math.min(distance, VIDEO_SPHERE_RADIUS - 1);
   const azimuth = THREE.MathUtils.degToRad(yaw);
   const elevation = THREE.MathUtils.degToRad(pitch);
   const angularRadiusRad = THREE.MathUtils.degToRad(size) / 2;
-  const radius = distance * Math.tan(angularRadiusRad);
+  const radius = cappedDist * Math.tan(angularRadiusRad);
   const geom = new THREE.SphereGeometry(radius, 32, 32);
   const mat = new THREE.MeshBasicMaterial({
     color,
@@ -159,13 +161,13 @@ function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000
   });
   const mesh = new THREE.Mesh(geom, mat);
   const pos = new THREE.Vector3(
-    Math.sin(azimuth) * Math.cos(elevation) * distance,
-    Math.sin(elevation) * distance,
-    -Math.cos(azimuth) * Math.cos(elevation) * distance
+    Math.sin(azimuth) * Math.cos(elevation) * cappedDist,
+    Math.sin(elevation) * cappedDist,
+    -Math.cos(azimuth) * Math.cos(elevation) * cappedDist
   );
   mesh.position.copy(pos);
   if (name && name.trim()) {
-    const label = createLabelMesh(name.trim(), radius, pos, distance);
+    const label = createLabelMesh(name.trim(), radius, pos, cappedDist);
     return new THREE.Group().add(mesh).add(label);
   }
   return mesh;

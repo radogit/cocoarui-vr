@@ -1,8 +1,1 @@
-{
-  "name": "My Awesome App",
-  "short_name": "App",
-  "start_url": "/cocoarui-vr/?string=",
-  "display": "standalone",
-  "background_color": "#0000ff",
-  "theme_color": "#00ff00"
-}
+{"name":"BubblesVR","short_name":"BubblesVR","display":"standalone","background_color":"#0000ff","theme_color":"#00ff00"}

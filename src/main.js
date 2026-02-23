@@ -5,6 +5,8 @@ import jsQR from "jsqr";
 import videoFile from "./assets/city_webgl.mp4";
 
 const ui = document.getElementById("ui");
+const uiButtons = document.getElementById("ui-buttons");
+const vrLandscapeOverlay = document.getElementById("vr-landscape-overlay");
 const enterBtn = document.getElementById("enter");
 const hud = document.getElementById("hud");
 const recenterBtn = document.getElementById("recenter");
@@ -24,7 +26,26 @@ const appRoot = document.getElementById('app-root');
 
 const STORAGE_KEY_QR_MARKERS = "qr_scanned_markers";
 
+function isLandscape() {
+  return typeof window !== "undefined" && window.innerWidth > window.innerHeight;
+}
+
+function updateOrientationUI() {
+  const landscape = isLandscape();
+  if (!inVRMode) {
+    // Initial screen: always show buttons
+    if (uiButtons) uiButtons.hidden = false;
+  } else {
+    // VR mode: landscape = show VR, portrait = show landscape-required overlay
+    if (vrLandscapeOverlay) vrLandscapeOverlay.hidden = landscape;
+    if (appRoot) appRoot.style.visibility = landscape ? "" : "hidden";
+    if (hud) hud.hidden = !landscape;
+    if (addToHomescreenTip && !landscape) addToHomescreenTip.classList.remove("visible");
+  }
+}
+
 let scene, camera, renderer, effect, controls;
+let inVRMode = false; // true after user has entered VR
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
@@ -423,7 +444,9 @@ Object.assign(video.style, {
   recenterBtn.addEventListener("click", recenter);
   fullscreenBtn.addEventListener("click", goFullscreen);
   playPauseBtn.addEventListener("click", playpause);
+  const scanQrHudBtn = document.getElementById("scan-qr-hud");
   if (scanQrBtn) scanQrBtn.addEventListener("click", startQrScan);
+  if (scanQrHudBtn) scanQrHudBtn.addEventListener("click", startQrScan);
   if (qrScannerClose) qrScannerClose.addEventListener("click", stopQrScan);
   if (qrClearStored) qrClearStored.addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY_QR_MARKERS);
@@ -443,7 +466,13 @@ Object.assign(video.style, {
       sessionStorage.setItem("addToHomescreenTipDismissed", "1");
     });
   }
-  window.addEventListener("resize", onResize);
+  updateOrientationUI();
+  const onOrientationOrResize = () => {
+    updateOrientationUI();
+    onResize();
+  };
+  window.addEventListener("resize", onOrientationOrResize);
+  window.addEventListener("orientationchange", () => setTimeout(onOrientationOrResize, 100));
 
 //   // 🔹 toggle inside/outside - to check whether the sphere mesh flipped
 //   window.addEventListener("keydown", (e) => {
@@ -512,12 +541,13 @@ async function enterVR() {
     await goFullscreen();
 
     ui.style.display = "none";
-    hud.hidden = false;
+    inVRMode = true;
+    updateOrientationUI();
 
-    // Show "Add to Home Screen" tip only in Safari (not in PWA/standalone)
+    // Show "Add to Home Screen" tip only in Safari (not in PWA/standalone) and when in landscape
     const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || !!navigator.standalone;
     const tipDismissed = sessionStorage.getItem("addToHomescreenTipDismissed");
-    if (addToHomescreenTip && !isStandalone && !tipDismissed) {
+    if (addToHomescreenTip && !isStandalone && !tipDismissed && isLandscape()) {
       addToHomescreenTip.classList.add("visible");
     }
 

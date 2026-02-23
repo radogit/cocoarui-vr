@@ -69,8 +69,20 @@
       inset:0;
     }
     #ui, #hud {
-      /* position:relative; */
       z-index:10;
+    }
+    #vr-landscape-overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(ellipse at center, rgba(0,0,0,.7), rgba(0,0,0,.9));
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, Arial;
+      z-index: 15;
+    }
+    #vr-landscape-overlay[hidden] {
+      display: none !important;
     }
 
     #add-to-homescreen-tip {
@@ -137,6 +149,9 @@
       display: flex;
       flex-direction: column;
     }
+    #qr-scanner {
+      margin-top: 50px;
+    }
     .qr-overlay[hidden],
     #qr-scanner[hidden] {
       display: none !important;
@@ -189,7 +204,7 @@
 
     <!-- First-tap UI (needed for iOS motion + video playback permissions) -->
     <div id="ui">
-      <div class="panel">
+      <div id="ui-buttons" class="panel">
         <div style="font-weight:700; font-size: 18px;">Cardboard 360° Video</div>
         <div>Tap “Enter VR” to grant motion + video permissions.</div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
@@ -197,6 +212,14 @@
           <button id="scan-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Scan QR</button>
           <button id="clear-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4); display:none;">Clear dataset</button>
         </div>
+      </div>
+    </div>
+
+    <!-- VR view: landscape required overlay (shown when in VR but phone is portrait) -->
+    <div id="vr-landscape-overlay" hidden>
+      <div class="panel">
+        <div style="font-weight:700; font-size: 18px;">Cardboard 360° Video</div>
+        <div>Please switch your phone to landscape mode for VR view.</div>
       </div>
     </div>
 
@@ -226,9 +249,10 @@
 
     <!-- On-screen HUD (recenter, fullscreen) -->
     <div id="hud" hidden>
-      <button id="recenter">Recenter</button>
+      <button id="recenter" hidden>Recenter</button>
       <button id="fullscreen" hidden>Fullscreen</button>
       <button id="playpause">Play/Pause</button>
+      <button id="scan-qr-hud" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Scan QR</button>
     </div>
 
     <script type="module" src="./main.js"></script>

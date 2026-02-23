@@ -141,20 +141,9 @@ Object.assign(video.style, {
 
 
 
-    // --- iOS standalone PWA orientation correction ---
-    const isStandalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    window.navigator.standalone;
-
-    if (isStandalone) {
-    // sphere.rotation.order = "YXZ";
-    sphere.rotation.z = -Math.PI / 2; // rotate 90° clockwise
-    sphere.rotation.x = Math.PI; // rotate
-    // sphere.rotation.x = Math.PI / 2; // rotate 90° clockwise
-    console.log("Applied PWA orientation fix (sphere rotated)");
-    } else {
-        sphere.rotation.y = Math.PI; // rotate
-    }
+    // Sphere rotation for 360 video orientation (same for Safari and standalone PWA).
+    // Standalone PWA landscape orientation fix is handled in DeviceOrientationControls.
+    sphere.rotation.y = Math.PI;
 
 
   //   // ------- wireframe helper -------
@@ -253,7 +242,6 @@ async function enterVR() {
 
     startTextureUpdates();  // <- drive canvas & texture from video frames
     animate();
-    setTimeout(recenter, 100);
   } catch (err) {
     console.error("enterVR error:", err);
     alert("Could not start VR/video. See console.");
@@ -337,7 +325,12 @@ function onResize() {
 
 
 function recenter() {
-  controls.alphaOffset = -camera.rotation.y;
+  // User decides "forward" when pressing recenter. Reference is never captured at launch.
+  // Forward = horizontal direction (yaw); gravity defines DOWN.
+  controls.setForwardReference();
+  if (controls.alphaForward == null) {
+    controls.alphaOffset = -camera.rotation.y;
+  }
 }
 
 function playpause() {

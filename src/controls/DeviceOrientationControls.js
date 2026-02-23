@@ -23,6 +23,8 @@ class DeviceOrientationControls extends EventDispatcher {
     this.deviceOrientation = {};
     this.screenOrientation = 0;
     this.alphaOffset = 0; // radians
+    this.alphaForward = null; // compass heading (rad) for "straight ahead" — set on first orientation
+    this.orientAtCapture = null; // screen orientation (rad) when alphaForward was captured
 
     this.onDeviceOrientationChangeEvent = (event) => {
       this.deviceOrientation = event;
@@ -42,10 +44,23 @@ class DeviceOrientationControls extends EventDispatcher {
   }
 
   _getScreenOrientation() {
+    let angle = 0;
     if (this._useScreenOrientationAPI && screen.orientation) {
-      return screen.orientation.angle;
+      angle = screen.orientation.angle;
+    } else {
+      angle = window.orientation || 0;
     }
-    return window.orientation || 0;
+    // iOS standalone PWA: when opened in landscape, orientation APIs often report 0.
+    // That causes 90° roll. Infer landscape from viewport and override.
+    const isStandalone =
+      (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
+      (typeof navigator !== 'undefined' && !!navigator.standalone);
+    const isLandscape =
+      typeof window !== 'undefined' && window.matchMedia?.('(orientation: landscape)')?.matches;
+    if (isStandalone && isLandscape && angle === 0) {
+      return 90; // landscape-right; if wrong, try -90
+    }
+    return angle;
   }
 
   connect() {
@@ -54,6 +69,13 @@ class DeviceOrientationControls extends EventDispatcher {
       screen.orientation.addEventListener('change', this.onScreenOrientationChangeEvent);
     } else {
       window.addEventListener('orientationchange', this.onScreenOrientationChangeEvent);
+    }
+    // Standalone PWA: orientationchange may not fire; resize often does on rotate
+    this._isStandalone =
+      (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
+      (typeof navigator !== 'undefined' && !!navigator.standalone);
+    if (this._isStandalone) {
+      window.addEventListener('resize', this.onScreenOrientationChangeEvent);
     }
     window.addEventListener('deviceorientation', this.onDeviceOrientationChangeEvent);
     this.enabled = true;
@@ -65,8 +87,25 @@ class DeviceOrientationControls extends EventDispatcher {
     } else {
       window.removeEventListener('orientationchange', this.onScreenOrientationChangeEvent);
     }
+    if (this._isStandalone) {
+      window.removeEventListener('resize', this.onScreenOrientationChangeEvent);
+    }
     window.removeEventListener('deviceorientation', this.onDeviceOrientationChangeEvent);
     this.enabled = false;
+  }
+
+  /**
+   * Set "forward" reference from user action (recenter). Never called at launch.
+   * alphaOffset is set once here and stays constant — recomputing per-frame would freeze yaw.
+   */
+  setForwardReference() {
+    const device = this.deviceOrientation;
+    const alphaDeg = device?.alpha;
+    if (typeof alphaDeg === 'number') {
+      this.alphaForward = MathUtils.degToRad(alphaDeg);
+      this.orientAtCapture = this.screenOrientation ? MathUtils.degToRad(this.screenOrientation) : 0;
+      this.alphaOffset = this.alphaForward - MathUtils.degToRad(alphaDeg);
+    }
   }
 
   update() {
@@ -75,7 +114,13 @@ class DeviceOrientationControls extends EventDispatcher {
     const device = this.deviceOrientation;
     if (!device) return;
 
-    const alpha = device.alpha ? MathUtils.degToRad(device.alpha) + this.alphaOffset : 0; // Z
+    const orientRad = this.screenOrientation ? MathUtils.degToRad(this.screenOrientation) : 0;
+    const orientAtCapture = this.orientAtCapture ?? 0;
+    const orientDelta = this.alphaForward != null ? orientRad - orientAtCapture : 0;
+    const alphaDeg = device.alpha;
+
+    const alpha =
+      alphaDeg != null ? MathUtils.degToRad(alphaDeg) + this.alphaOffset + orientDelta : 0; // Z
     const beta = device.beta ? MathUtils.degToRad(device.beta) : 0; // X'
     const gamma = device.gamma ? MathUtils.degToRad(device.gamma) : 0; // Y''
     const orient = this.screenOrientation ? MathUtils.degToRad(this.screenOrientation) : 0; // O

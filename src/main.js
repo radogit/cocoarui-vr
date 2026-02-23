@@ -9,6 +9,8 @@ const hud = document.getElementById("hud");
 const recenterBtn = document.getElementById("recenter");
 const fullscreenBtn = document.getElementById("fullscreen");
 const playPauseBtn = document.getElementById("playpause");
+const addToHomescreenTip = document.getElementById("add-to-homescreen-tip");
+const addToHomescreenTipClose = document.getElementById("add-to-homescreen-tip-close");
 
 const appRoot = document.getElementById('app-root');
 
@@ -322,6 +324,12 @@ Object.assign(video.style, {
   recenterBtn.addEventListener("click", recenter);
   fullscreenBtn.addEventListener("click", goFullscreen);
   playPauseBtn.addEventListener("click", playpause);
+  if (addToHomescreenTipClose) {
+    addToHomescreenTipClose.addEventListener("click", () => {
+      addToHomescreenTip?.classList.remove("visible");
+      sessionStorage.setItem("addToHomescreenTipDismissed", "1");
+    });
+  }
   window.addEventListener("resize", onResize);
 
 //   // 🔹 toggle inside/outside - to check whether the sphere mesh flipped
@@ -392,6 +400,13 @@ async function enterVR() {
 
     ui.style.display = "none";
     hud.hidden = false;
+
+    // Show "Add to Home Screen" tip only in Safari (not in PWA/standalone)
+    const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || !!navigator.standalone;
+    const tipDismissed = sessionStorage.getItem("addToHomescreenTipDismissed");
+    if (addToHomescreenTip && !isStandalone && !tipDismissed) {
+      addToHomescreenTip.classList.add("visible");
+    }
 
     startTextureUpdates();  // <- drive canvas & texture from video frames
     animate();

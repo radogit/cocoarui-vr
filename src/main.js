@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { DeviceOrientationControls } from "./controls/DeviceOrientationControls.js";
 import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
+import jsQR from "jsqr";
 import videoFile from "./assets/city_webgl.mp4";
 
 const ui = document.getElementById("ui");
@@ -11,8 +12,17 @@ const fullscreenBtn = document.getElementById("fullscreen");
 const playPauseBtn = document.getElementById("playpause");
 const addToHomescreenTip = document.getElementById("add-to-homescreen-tip");
 const addToHomescreenTipClose = document.getElementById("add-to-homescreen-tip-close");
+const scanQrBtn = document.getElementById("scan-qr");
+const qrScanner = document.getElementById("qr-scanner");
+const qrScannerClose = document.getElementById("qr-scanner-close");
+const qrVideo = document.getElementById("qr-video");
+const qrCanvas = document.getElementById("qr-canvas");
+const qrClearStored = document.getElementById("qr-clear-stored");
+const clearQrBtn = document.getElementById("clear-qr");
 
 const appRoot = document.getElementById('app-root');
+
+const STORAGE_KEY_QR_MARKERS = "qr_scanned_markers";
 
 let scene, camera, renderer, effect, controls;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
@@ -55,10 +65,12 @@ function parseHexColor(hex) {
   return { color: 0xff0000, opacity: 1 };
 }
 
-function parseMarkersFromURL() {
-  const params = new URLSearchParams(window.location.search);
-  const raw = params.get("markers");
-  if (!raw) return [];
+/**
+ * Parse markers from a raw string (value of markers param).
+ * Supports: JSON array, or pipe-separated yaw,pitch,size|...
+ */
+function parseMarkersFromRawString(raw) {
+  if (!raw || typeof raw !== "string") return [];
   const trimmed = raw.trim();
   if (!trimmed) return [];
   try {
@@ -97,6 +109,31 @@ function parseMarkersFromURL() {
   } catch {
     return [];
   }
+}
+
+/**
+ * Extract markers from URL, QR-scanned string, or localStorage.
+ * Scanned string can be: full URL, query string, or raw markers value.
+ */
+function parseMarkersFromURL() {
+  // 1. URL params
+  const params = new URLSearchParams(window.location.search);
+  let raw = params.get("markers");
+  if (raw) return parseMarkersFromRawString(raw);
+
+  // 2. localStorage (from QR scan)
+  try {
+    raw = localStorage.getItem(STORAGE_KEY_QR_MARKERS);
+    if (raw) {
+      if (raw.includes("?") || raw.includes("markers=")) {
+        const url = raw.startsWith("http") ? raw : "https://x?" + (raw.startsWith("?") ? raw.slice(1) : raw);
+        const u = new URL(url);
+        raw = u.searchParams.get("markers") || raw;
+      }
+      return parseMarkersFromRawString(raw);
+    }
+  } catch {}
+  return [];
 }
 
 /**
@@ -175,6 +212,68 @@ function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000
   return mesh;
 }
 
+let qrStream = null;
+let qrAnimationId = null;
+
+async function startQrScan() {
+  if (!qrScanner || !qrVideo || !qrCanvas) return;
+  try {
+    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    qrVideo.srcObject = qrStream;
+    await qrVideo.play();
+    qrScanner.hidden = false;
+    qrAnimationId = requestAnimationFrame(tickQrScan);
+  } catch (err) {
+    console.error("QR scan camera error:", err);
+    alert("Could not access camera. Grant permission and try again.");
+  }
+}
+
+function stopQrScan() {
+  if (qrAnimationId) {
+    cancelAnimationFrame(qrAnimationId);
+    qrAnimationId = null;
+  }
+  if (qrStream) {
+    qrStream.getTracks().forEach((t) => t.stop());
+    qrStream = null;
+  }
+  if (qrVideo) qrVideo.srcObject = null;
+  if (qrScanner) qrScanner.hidden = true;
+}
+
+function tickQrScan() {
+  if (!qrVideo || !qrCanvas || qrVideo.readyState !== qrVideo.HAVE_ENOUGH_DATA) {
+    qrAnimationId = requestAnimationFrame(tickQrScan);
+    return;
+  }
+  const ctx = qrCanvas.getContext("2d");
+  qrCanvas.width = qrVideo.videoWidth;
+  qrCanvas.height = qrVideo.videoHeight;
+  ctx.drawImage(qrVideo, 0, 0);
+  const imageData = ctx.getImageData(0, 0, qrCanvas.width, qrCanvas.height);
+  const code = jsQR(imageData.data, imageData.width, imageData.height);
+  if (code && code.data) {
+    const data = code.data.trim();
+    let rawMarkers = data;
+    if (data.includes("?") || data.includes("markers=")) {
+      try {
+        const url = data.startsWith("http") ? data : "https://x?" + data.replace(/^\?/, "");
+        const u = new URL(url);
+        rawMarkers = u.searchParams.get("markers") || data;
+      } catch {}
+    }
+    const markers = parseMarkersFromRawString(rawMarkers);
+    if (markers.length > 0 || data.startsWith("[") || data.includes("|") || data.includes("markers=")) {
+      localStorage.setItem(STORAGE_KEY_QR_MARKERS, data);
+      stopQrScan();
+      window.location.reload();
+      return;
+    }
+  }
+  qrAnimationId = requestAnimationFrame(tickQrScan);
+}
+
 init();
 
 function init() {
@@ -207,8 +306,8 @@ function init() {
   appRoot.appendChild(renderer.domElement);
 //   renderer.domElement.style.position = "fixed";
   renderer.domElement.style.inset = "0";
-  renderer.domElement.style.width = "100vw";
-  renderer.domElement.style.height = "100vh";
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
   renderer.domElement.style.display = "block";
   renderer.domElement.style.touchAction = "none"; // prevent pull-to-refresh
 
@@ -324,6 +423,20 @@ Object.assign(video.style, {
   recenterBtn.addEventListener("click", recenter);
   fullscreenBtn.addEventListener("click", goFullscreen);
   playPauseBtn.addEventListener("click", playpause);
+  if (scanQrBtn) scanQrBtn.addEventListener("click", startQrScan);
+  if (qrScannerClose) qrScannerClose.addEventListener("click", stopQrScan);
+  if (qrClearStored) qrClearStored.addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEY_QR_MARKERS);
+    stopQrScan();
+    window.location.reload();
+  });
+  if (clearQrBtn) {
+    if (localStorage.getItem(STORAGE_KEY_QR_MARKERS)) clearQrBtn.style.display = "";
+    clearQrBtn.addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY_QR_MARKERS);
+      window.location.reload();
+    });
+  }
   if (addToHomescreenTipClose) {
     addToHomescreenTipClose.addEventListener("click", () => {
       addToHomescreenTip?.classList.remove("visible");
@@ -558,16 +671,7 @@ function sizeToViewport() {
   const w = vv ? Math.round(vv.width)  : window.innerWidth;
   const h = vv ? Math.round(vv.height) : window.innerHeight;
 
-  // Keep a CSS var for the fallback route (old iOS)
-  document.documentElement.style.setProperty('--vh', `${h / 100}px`);
-
-  // For old iOS that ignores dvh: mark the container to use the --vh calc
-  // Newer Safari will ignore the data-attr thanks to 100dvh @supports above.
-  if (!CSS.supports('height: 100dvh')) {
-    appRoot.setAttribute('data-use-vh', '1');
-  }
-
-  // Size Three without letting it also scale the DOM canvas; CSS controls pixels.
+  // Size Three; CSS controls canvas display
   renderer.setSize(w, h, false);
   effect.setSize(w, h);
 

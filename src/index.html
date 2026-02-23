@@ -20,31 +20,26 @@
     html, body { 
         margin:0; padding:0; 
         height:100%; width:100%; 
-        /* overflow:hidden;  */
+        overflow:hidden;
         background:#000; 
         -webkit-text-size-adjust: 100%;
-        overscroll-behavior: contain; /* prevent rubber-band scrolling */
-        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: none;
     }
     html {
-        touch-action: manipulation; /* disable double-tap to zoom */
-        scrollbar-gutter: stable; /* prevent layout shift when scrollbars appear */
-        overflow-x: hidden;
+        touch-action: manipulation;
+        position: fixed;
+        inset: 0;
+    }
+    body {
+        position: fixed;
+        inset: 0;
     }
     #app-root {
-        position: absolute; /* not fixed → your button remains clickable */
-        left: 0; top: 0;
-        width: 100vw; height: 100vh; /* baseline */
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
         z-index: 0;
-    }
-
-    /* Prefer the new dynamic viewport units when available */
-    @supports (height: 100dvh) {
-        #app-root { width: 100dvw; height: 100dvh; }
-    }
-    /* Fallback shim for old iOS: JS sets --vh to the true VisualViewport height */
-    #app-root[data-use-vh="1"] {
-        height: calc(var(--vh, 1vh) * 100);
     }
 
     #ui {
@@ -66,8 +61,8 @@
     #hud button { opacity:.85; }
     canvas.webgl {
       display:block;
-      width:100vw;
-      height:100vh;
+      width:100%;
+      height:100%;
       touch-action:none;
       z-index:0;
       position:absolute;
@@ -134,6 +129,56 @@
       opacity: 0.95;
     }
 
+    .qr-overlay {
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    .qr-overlay[hidden],
+    #qr-scanner[hidden] {
+      display: none !important;
+    }
+    .qr-overlay-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: rgba(0,0,0,.8);
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, Arial;
+    }
+    .qr-close {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      background: rgba(255,255,255,.2);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    #qr-video {
+      flex: 1;
+      width: 100%;
+      object-fit: cover;
+    }
+    .qr-overlay-footer {
+      padding: 12px;
+      background: rgba(0,0,0,.8);
+      text-align: center;
+    }
+    .qr-clear-btn {
+      background: transparent;
+      color: rgba(255,255,255,.7);
+      font-size: 13px;
+      padding: 8px 12px;
+    }
+
     </style>
   </head>
   <body>
@@ -147,7 +192,24 @@
       <div class="panel">
         <div style="font-weight:700; font-size: 18px;">Cardboard 360° Video</div>
         <div>Tap “Enter VR” to grant motion + video permissions.</div>
-        <button id="enter">Enter VR</button>
+        <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+          <button id="enter">Enter VR</button>
+          <button id="scan-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Scan QR</button>
+          <button id="clear-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4); display:none;">Clear dataset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Scanner overlay -->
+    <div id="qr-scanner" class="qr-overlay" hidden>
+      <div class="qr-overlay-header">
+        <span>Point camera at QR code</span>
+        <button id="qr-scanner-close" class="qr-close" aria-label="Close">×</button>
+      </div>
+      <video id="qr-video" playsinline muted></video>
+      <canvas id="qr-canvas" hidden></canvas>
+      <div class="qr-overlay-footer">
+        <button id="qr-clear-stored" type="button" class="qr-clear-btn">Clear stored dataset</button>
       </div>
     </div>
 

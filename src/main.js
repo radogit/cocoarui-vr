@@ -16,6 +16,7 @@ let scene, camera, renderer, effect, controls;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
+const labelPlanes = []; // billboard labels, updated each frame to face camera
 
 /**
  * Parse markers from URL param. Format: markers=yaw,pitch,size|yaw,pitch,size|...
@@ -70,6 +71,7 @@ function parseMarkersFromURL() {
           color,
           opacity: m.opacity != null ? Number(m.opacity) : opacity,
           distance: Number(m.distance ?? m[4] ?? 400),
+          name: m.name ?? m[5] ?? "",
         };
       });
     }
@@ -78,6 +80,7 @@ function parseMarkersFromURL() {
       const { color, opacity } = parseHexColor(v[3]);
       const distanceRaw = v[4];
       const distance = distanceRaw ? parseFloat(distanceRaw) || 400 : 400;
+      const name = v.length > 5 ? v.slice(5).join(",").trim() : "";
       return {
         yaw: parseFloat(v[0]) || 0,
         pitch: parseFloat(v[1]) || 0,
@@ -85,6 +88,7 @@ function parseMarkersFromURL() {
         color,
         opacity,
         distance,
+        name,
       };
     });
   } catch {
@@ -93,10 +97,56 @@ function parseMarkersFromURL() {
 }
 
 /**
+ * Create a text label as a billboard plane, scaled to fit within a circle of given radius.
+ * Positioned in front of the sphere (between camera and sphere surface) so it's visible.
+ */
+function createLabelMesh(text, radius, position, distance) {
+  const size = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0)";
+  ctx.fillRect(0, 0, size, size);
+  ctx.font = "bold 48px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 6;
+  const lines = text.split("\n");
+  const lineHeight = 56;
+  const startY = size / 2 - ((lines.length - 1) * lineHeight) / 2;
+  lines.forEach((line, i) => {
+    const y = startY + i * lineHeight;
+    ctx.strokeText(line, size / 2, y);
+    ctx.fillText(line, size / 2, y);
+  });
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0.95,
+    side: THREE.DoubleSide,
+    depthTest: true,
+    depthWrite: true,
+  });
+  const side = radius * 1.2;
+  const geom = new THREE.PlaneGeometry(side, side);
+  const plane = new THREE.Mesh(geom, mat);
+  const frontDist = Math.max(0.1, distance - radius - 0.02);
+  plane.position.copy(position).multiplyScalar(frontDist / distance);
+  labelPlanes.push(plane);
+  return plane;
+}
+
+/**
  * Create a sphere marker at polar coords (yaw, pitch) with angular size.
  * size = angular diameter in degrees. radius = distance * tan(size/2).
+ * Optional name: displayed as billboard label inside the sphere.
  */
-function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1 }) {
+function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1, name }) {
   const azimuth = THREE.MathUtils.degToRad(yaw);
   const elevation = THREE.MathUtils.degToRad(pitch);
   const angularRadiusRad = THREE.MathUtils.degToRad(size) / 2;
@@ -108,11 +158,16 @@ function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000
     opacity,
   });
   const mesh = new THREE.Mesh(geom, mat);
-  mesh.position.set(
+  const pos = new THREE.Vector3(
     Math.sin(azimuth) * Math.cos(elevation) * distance,
     Math.sin(elevation) * distance,
     -Math.cos(azimuth) * Math.cos(elevation) * distance
   );
+  mesh.position.copy(pos);
+  if (name && name.trim()) {
+    const label = createLabelMesh(name.trim(), radius, pos, distance);
+    return new THREE.Group().add(mesh).add(label);
+  }
   return mesh;
 }
 
@@ -347,6 +402,7 @@ async function enterVR() {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  labelPlanes.forEach((p) => p.lookAt(camera.position));
 
   if (
     video.readyState >= video.HAVE_CURRENT_DATA &&

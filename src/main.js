@@ -17,6 +17,104 @@ let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
 
+/**
+ * Parse markers from URL param. Format: markers=yaw,pitch,size|yaw,pitch,size|...
+ * Optional: yaw,pitch,size,color,distance — color and distance are last, both optional.
+ * Or JSON: markers=[{"yaw":-30,"pitch":10,"size":2}]
+ *
+ * D3 simulation mapping (scaleUnit = minDim/180, 1 data unit = 1 degree):
+ *   - yaw = node.x (degrees, longitude)
+ *   - pitch = node.y (degrees, latitude; D3 y-down, VR y-up — layout export flips)
+ *   - size = angular diameter in degrees = 2 * node.radius
+ *   - exportMetricsCSV outputs: x, y, diameter (use diameter as size)
+ *   - exportLayoutJSON hotspots: width/height = side = r*sqrt(π); angular diameter = 2*side/sqrt(π)
+ *
+ * Distance: optional, last. Controls depth when spheres overlap at same yaw/pitch (closer = foreground).
+ *
+ * Color: hex RRGGBB or RRGGBBAA (8 hex with alpha). Alpha 00=transparent, ff=opaque.
+ */
+function parseHexColor(hex) {
+  const s = String(hex || "").replace(/^#/, "");
+  if (s.length === 8) {
+    const color = parseInt(s.slice(0, 6), 16);
+    const a = parseInt(s.slice(6, 8), 16);
+    return { color: isNaN(color) ? 0xff0000 : color, opacity: isNaN(a) ? 1 : a / 255 };
+  }
+  if (s.length === 6) {
+    const color = parseInt(s, 16);
+    return { color: isNaN(color) ? 0xff0000 : color, opacity: 1 };
+  }
+  if (s.length === 4) {
+    const r = parseInt(s[0] + s[0], 16), g = parseInt(s[1] + s[1], 16), b = parseInt(s[2] + s[2], 16), a = parseInt(s[3] + s[3], 16);
+    return { color: (r << 16) | (g << 8) | b, opacity: isNaN(a) ? 1 : a / 255 };
+  }
+  return { color: 0xff0000, opacity: 1 };
+}
+
+function parseMarkersFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  const raw = params.get("markers");
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  try {
+    if (trimmed.startsWith("[")) {
+      const arr = JSON.parse(trimmed);
+      return arr.map((m) => {
+        const colorStr = m.color ?? m[3] ?? "ff0000";
+        const { color, opacity } = typeof colorStr === "number" ? { color: colorStr, opacity: 1 } : parseHexColor(colorStr);
+        return {
+          yaw: Number(m.yaw ?? m[0] ?? 0),
+          pitch: Number(m.pitch ?? m[1] ?? 0),
+          size: Number(m.size ?? m[2] ?? 2),
+          color,
+          opacity: m.opacity != null ? Number(m.opacity) : opacity,
+          distance: Number(m.distance ?? m[4] ?? 400),
+        };
+      });
+    }
+    return trimmed.split("|").map((part) => {
+      const v = part.split(",").map((s) => s.trim());
+      const { color, opacity } = parseHexColor(v[3]);
+      const distanceRaw = v[4];
+      const distance = distanceRaw ? parseFloat(distanceRaw) || 400 : 400;
+      return {
+        yaw: parseFloat(v[0]) || 0,
+        pitch: parseFloat(v[1]) || 0,
+        size: parseFloat(v[2]) || 2,
+        color,
+        opacity,
+        distance,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Create a sphere marker at polar coords (yaw, pitch) with angular size.
+ * size = angular diameter in degrees. radius = distance * tan(size/2).
+ */
+function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1 }) {
+  const azimuth = THREE.MathUtils.degToRad(yaw);
+  const elevation = THREE.MathUtils.degToRad(pitch);
+  const angularRadiusRad = THREE.MathUtils.degToRad(size) / 2;
+  const radius = distance * Math.tan(angularRadiusRad);
+  const geom = new THREE.SphereGeometry(radius, 32, 32);
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: opacity < 1,
+    opacity,
+  });
+  const mesh = new THREE.Mesh(geom, mat);
+  mesh.position.set(
+    Math.sin(azimuth) * Math.cos(elevation) * distance,
+    Math.sin(elevation) * distance,
+    -Math.cos(azimuth) * Math.cos(elevation) * distance
+  );
+  return mesh;
+}
 
 init();
 
@@ -115,24 +213,22 @@ Object.assign(video.style, {
   sphere = new THREE.Mesh(geom, mat);
   scene.add(sphere);
 
-
-    // --- 3D reference sphere (red) ---
-    const refGeometry = new THREE.SphereGeometry(5, 32, 32); // radius 5 units
-    const refMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-    const refSphere = new THREE.Mesh(refGeometry, refMaterial);
-
-    // place it slightly above horizon and to the left
-    // (e.g. 30° to the left, 10° up, 400 units away from camera center)
-    const distance = 400;
-    const azimuth = THREE.MathUtils.degToRad(-30); // left/right
-    const elevation = THREE.MathUtils.degToRad(10); // up/down
-    refSphere.position.set(
-    Math.sin(azimuth) * Math.cos(elevation) * distance,
-    Math.sin(elevation) * distance,
-    -Math.cos(azimuth) * Math.cos(elevation) * distance
+  // --- Markers from URL param ---
+  // Format: ?markers=yaw,pitch,size|yaw,pitch,size|...
+  //   yaw, pitch: degrees (matches D3 simulation: x=yaw, y=pitch)
+  //   size: angular diameter in degrees (same units as yaw/pitch — "angular size")
+  // Optional 4th value: distance from camera (default 400)
+  // Optional 5th: color hex (default 0xff0000)
+  // Example: ?markers=-30,10,2|0,0,5,300
+  const markers = parseMarkersFromURL();
+  if (markers.length > 0) {
+    markers.forEach((m) => scene.add(createMarkerSphere(m)));
+  } else {
+    // Fallback: one red sphere (same as before)
+    scene.add(
+      createMarkerSphere({ yaw: -30, pitch: 10, size: 1.4, distance: 400, color: 0xff0000 })
     );
-
-    scene.add(refSphere);
+  }
 
 
 

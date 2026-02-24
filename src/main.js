@@ -129,7 +129,7 @@ const DEFAULT_SETTINGS = {
 };
 
 /** Bridge format versions supported by VRPreview. Bump when adding new parsers. */
-const SUPPORTED_BRIDGE_VERSIONS = [1];
+const SUPPORTED_BRIDGE_VERSIONS = [1, 2];
 
 /**
  * Parse bridge format v1: { v: 1, nodes: [...], settings: {...} }
@@ -149,6 +149,32 @@ function parseBridgeV1(obj) {
       opacity: m.opacity != null ? Number(m.opacity) : opacity,
       distance: Number(m.distance ?? m[4] ?? 400),
       name: m.name ?? m[5] ?? "",
+      representation: m.representation ?? "number",
+    };
+  });
+  return { markers, settings };
+}
+
+/**
+ * Parse bridge format v2: { v: 2, nodes: [...], settings: {...} }
+ * Node: { yaw, pitch, size, color, name, representation, opacity }
+ */
+function parseBridgeV2(obj) {
+  const arr = obj.nodes ?? [];
+  const settings = { ...DEFAULT_SETTINGS, ...(obj.settings ?? {}) };
+  const markers = arr.map((m) => {
+    const colorStr = m.color ?? m[3] ?? "ff0000";
+    const { color, opacity: colorOpacity } = typeof colorStr === "number" ? { color: colorStr, opacity: 1 } : parseHexColor(colorStr);
+    const opacity = m.opacity != null ? Math.max(0, Math.min(1, Number(m.opacity))) : colorOpacity;
+    return {
+      yaw: Number(m.yaw ?? m[0] ?? 0),
+      pitch: Number(m.pitch ?? m[1] ?? 0),
+      size: Number(m.size ?? m[2] ?? 2),
+      color,
+      opacity,
+      distance: Number(m.distance ?? m[4] ?? 400),
+      name: m.name ?? m[5] ?? "",
+      representation: m.representation ?? "number",
     };
   });
   return { markers, settings };
@@ -166,6 +192,7 @@ function parseBridgeByVersion(obj) {
     return { markers: [], settings: { ...DEFAULT_SETTINGS } };
   }
   if (version === 1) return parseBridgeV1(obj);
+  if (version === 2) return parseBridgeV2(obj);
   return { markers: [], settings: { ...DEFAULT_SETTINGS } };
 }
 
@@ -318,15 +345,19 @@ function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000
   const group = new THREE.Group();
   if (showCircle) {
     const geom = new THREE.SphereGeometry(radius, 32, 32);
+    const clampedOpacity = Math.max(0, Math.min(1, opacity));
     const mat = new THREE.MeshBasicMaterial({
       color,
-      transparent: opacity < 1,
-      opacity,
+      transparent: true,
+      opacity: clampedOpacity,
+      depthWrite: clampedOpacity >= 1,
+      depthTest: true,
     });
     const mesh = new THREE.Mesh(geom, mat);
     mesh.position.copy(pos);
     group.add(mesh);
   }
+  group.renderOrder = 1;
   if (showLabel && name && name.trim()) {
     const label = createLabelMesh(name.trim(), radius, pos, cappedDist);
     group.add(label);
@@ -359,8 +390,8 @@ function createAxisTickLabel(text, yaw, pitch, distance, offsetYaw = 0, offsetPi
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "black";
-  ctx.strokeStyle = "black";
-  ctx.lineWidth = 0;
+  ctx.strokeStyle = "white";
+  ctx.lineWidth = 3;
   ctx.strokeText(text, size / 2, size / 2);
   ctx.fillText(text, size / 2, size / 2);
   const tex = new THREE.CanvasTexture(canvas);

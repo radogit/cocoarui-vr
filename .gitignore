@@ -3,6 +3,8 @@ node_modules
 .cache
 dist/
 scripts/
+.mailmap
+.replace-text
 .DS_Store
 README_dev.txt
 ignore

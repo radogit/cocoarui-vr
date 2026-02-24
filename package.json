@@ -6,7 +6,7 @@
     "build": "parcel build src/index.html --public-url ./",
     "deploy": "npm run build && gh-pages -d dist && echo \"deployed to: https://radogit.github.io/cocoarui-vr/\" && echo \"check status on: https://github.com/radogit/cocoarui-vr/deployments\"",
     "clean": "rm -rf dist .parcel-cache",
-    "generate-cert": "./scripts/generate-cert.sh"
+    "generate-cert": "openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout localhost-key.pem -out localhost.pem -config cert-extensions.cnf -extensions v3_req"
   },
   "dependencies": {
     "jsqr": "^1.4.0",

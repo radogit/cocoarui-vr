@@ -3,6 +3,18 @@ import { DeviceOrientationControls } from "./controls/DeviceOrientationControls.
 import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
 import jsQR from "jsqr";
 import videoFile from "./assets/city_webgl.mp4";
+import VRAscentVideo from "./assets/uphil2-Sallandse_Heuvelrug_(more2)_VIRB_V1380254-5-uphill4(1m21s).mp4";
+import VRDescentVideo from "./assets/VRDescentVideo.mp4"; //Sallandse_Heuvelrug_video_1_cropped.mp4
+import PPAscentVideo from "./assets/final-PPA-70s,20kph,400m,60mRise.mp4";
+import PPDescentVideo from "./assets/final-PPD-35s,36kph,350m,15mDrop.mp4";
+
+/** Maps bgPreset key (from D3/QR) to video asset URL. */
+const BG_PRESET_VIDEOS = {
+  "vr-uphill": VRAscentVideo,
+  "vr-downhill": VRDescentVideo,
+  "base-downhill": PPDescentVideo,
+  "base-uphill": PPAscentVideo,
+};
 
 const ui = document.getElementById("ui");
 const uiButtons = document.getElementById("ui-buttons");
@@ -86,18 +98,34 @@ function parseHexColor(hex) {
   return { color: 0xff0000, opacity: 1 };
 }
 
+const DEFAULT_SETTINGS = {
+  bg: 1,
+  bgPreset: "vr-downhill", // TODO: revert to "base-downhill" after troubleshooting
+  bgOpacity: 100,
+  axis: 0,
+  gridV: 0,
+  gridH: 0,
+  nodeCircles: 1,
+  nodeIcon: 1,
+  nodeLabel: 1,
+};
+
 /**
  * Parse markers from a raw string (value of markers param).
- * Supports: JSON array, or pipe-separated yaw,pitch,size|...
+ * Supports: JSON array [{}], JSON object { nodes: [], settings: {} }, or pipe-separated yaw,pitch,size|...
+ * Returns { markers: [], settings: {} }
  */
 function parseMarkersFromRawString(raw) {
-  if (!raw || typeof raw !== "string") return [];
+  const empty = { markers: [], settings: { ...DEFAULT_SETTINGS } };
+  if (!raw || typeof raw !== "string") return empty;
   const trimmed = raw.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return empty;
   try {
-    if (trimmed.startsWith("[")) {
-      const arr = JSON.parse(trimmed);
-      return arr.map((m) => {
+    if (trimmed.startsWith("{")) {
+      const obj = JSON.parse(trimmed);
+      const arr = obj.nodes ?? [];
+      const settings = { ...DEFAULT_SETTINGS, ...(obj.settings ?? {}) };
+      const markers = arr.map((m) => {
         const colorStr = m.color ?? m[3] ?? "ff0000";
         const { color, opacity } = typeof colorStr === "number" ? { color: colorStr, opacity: 1 } : parseHexColor(colorStr);
         return {
@@ -110,8 +138,26 @@ function parseMarkersFromRawString(raw) {
           name: m.name ?? m[5] ?? "",
         };
       });
+      return { markers, settings };
     }
-    return trimmed.split("|").map((part) => {
+    if (trimmed.startsWith("[")) {
+      const arr = JSON.parse(trimmed);
+      const markers = arr.map((m) => {
+        const colorStr = m.color ?? m[3] ?? "ff0000";
+        const { color, opacity } = typeof colorStr === "number" ? { color: colorStr, opacity: 1 } : parseHexColor(colorStr);
+        return {
+          yaw: Number(m.yaw ?? m[0] ?? 0),
+          pitch: Number(m.pitch ?? m[1] ?? 0),
+          size: Number(m.size ?? m[2] ?? 2),
+          color,
+          opacity: m.opacity != null ? Number(m.opacity) : opacity,
+          distance: Number(m.distance ?? m[4] ?? 400),
+          name: m.name ?? m[5] ?? "",
+        };
+      });
+      return { markers, settings: { ...DEFAULT_SETTINGS } };
+    }
+    const markers = trimmed.split("|").map((part) => {
       const v = part.split(",").map((s) => s.trim());
       const { color, opacity } = parseHexColor(v[3]);
       const distanceRaw = v[4];
@@ -127,8 +173,9 @@ function parseMarkersFromRawString(raw) {
         name,
       };
     });
+    return { markers, settings: { ...DEFAULT_SETTINGS } };
   } catch {
-    return [];
+    return empty;
   }
 }
 
@@ -154,7 +201,7 @@ function parseMarkersFromURL() {
       return parseMarkersFromRawString(raw);
     }
   } catch {}
-  return [];
+  return { markers: [], settings: { ...DEFAULT_SETTINGS } };
 }
 
 /**
@@ -206,31 +253,38 @@ function createLabelMesh(text, radius, position, distance) {
  * Create a sphere marker at polar coords (yaw, pitch) with angular size.
  * size = angular diameter in degrees. radius = distance * tan(size/2).
  * Optional name: displayed as billboard label inside the sphere.
+ * @param {Object} settings - { nodeCircles, nodeLabel } from QR payload
  */
-function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1, name }) {
+function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1, name }, settings = {}) {
+  const showCircle = (settings.nodeCircles ?? 1) === 1;
+  const showLabel = (settings.nodeLabel ?? 1) === 1;
   const cappedDist = Math.min(distance, VIDEO_SPHERE_RADIUS - 1);
   const azimuth = THREE.MathUtils.degToRad(yaw);
   const elevation = THREE.MathUtils.degToRad(pitch);
   const angularRadiusRad = THREE.MathUtils.degToRad(size) / 2;
   const radius = cappedDist * Math.tan(angularRadiusRad);
-  const geom = new THREE.SphereGeometry(radius, 32, 32);
-  const mat = new THREE.MeshBasicMaterial({
-    color,
-    transparent: opacity < 1,
-    opacity,
-  });
-  const mesh = new THREE.Mesh(geom, mat);
   const pos = new THREE.Vector3(
     Math.sin(azimuth) * Math.cos(elevation) * cappedDist,
     Math.sin(elevation) * cappedDist,
     -Math.cos(azimuth) * Math.cos(elevation) * cappedDist
   );
-  mesh.position.copy(pos);
-  if (name && name.trim()) {
-    const label = createLabelMesh(name.trim(), radius, pos, cappedDist);
-    return new THREE.Group().add(mesh).add(label);
+  const group = new THREE.Group();
+  if (showCircle) {
+    const geom = new THREE.SphereGeometry(radius, 32, 32);
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: opacity < 1,
+      opacity,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.copy(pos);
+    group.add(mesh);
   }
-  return mesh;
+  if (showLabel && name && name.trim()) {
+    const label = createLabelMesh(name.trim(), radius, pos, cappedDist);
+    group.add(label);
+  }
+  return group.children.length > 0 ? group : null;
 }
 
 let qrStream = null;
@@ -284,8 +338,8 @@ function tickQrScan() {
         rawMarkers = u.searchParams.get("markers") || data;
       } catch {}
     }
-    const markers = parseMarkersFromRawString(rawMarkers);
-    if (markers.length > 0 || data.startsWith("[") || data.includes("|") || data.includes("markers=")) {
+    const { markers } = parseMarkersFromRawString(rawMarkers);
+    if (markers.length > 0 || data.startsWith("[") || data.startsWith("{") || data.includes("|") || data.includes("markers=")) {
       localStorage.setItem(STORAGE_KEY_QR_MARKERS, data);
       stopQrScan();
       window.location.reload();
@@ -336,9 +390,13 @@ function init() {
   effect = new StereoEffect(renderer);
   effect.setSize(window.innerWidth, window.innerHeight);
 
+  // --- Parse markers/settings early (needed for video selection) ---
+  const { markers, settings } = parseMarkersFromURL();
+  const videoSrc = BG_PRESET_VIDEOS[settings.bgPreset] ?? videoFile;
+
   // ---------- VIDEO ----------
   video = document.createElement("video");
-  video.src = videoFile;
+  video.src = videoSrc;
   video.loop = true;
   video.muted = true;
   video.playsInline = true;
@@ -392,21 +450,23 @@ Object.assign(video.style, {
   sphere = new THREE.Mesh(geom, mat);
   scene.add(sphere);
 
-  // --- Markers from URL param ---
-  // Format: ?markers=yaw,pitch,size|yaw,pitch,size|...
-  //   yaw, pitch: degrees (matches D3 simulation: x=yaw, y=pitch)
-  //   size: angular diameter in degrees (same units as yaw/pitch — "angular size")
-  // Optional 4th value: distance from camera (default 400)
-  // Optional 5th: color hex (default 0xff0000)
-  // Example: ?markers=-30,10,2|0,0,5,300
-  const markers = parseMarkersFromURL();
+  // --- Markers from URL param / QR scan (parsed above) ---
   if (markers.length > 0) {
-    markers.forEach((m) => scene.add(createMarkerSphere(m)));
+    markers.forEach((m) => {
+      const mesh = createMarkerSphere(m, settings);
+      if (mesh) scene.add(mesh);
+    });
   } else {
     // Fallback: one red sphere (same as before)
-    scene.add(
-      createMarkerSphere({ yaw: -30, pitch: 10, size: 1.4, distance: 400, color: 0xff0000 })
-    );
+    // const mesh = createMarkerSphere({ yaw: -30, pitch: 10, size: 1.4, distance: 400, color: 0xff0000 }, settings);
+    // if (mesh) scene.add(mesh);
+  }
+  // Apply settings: background sphere visibility and opacity
+  if (sphere && sphere.material) {
+    sphere.visible = (settings.bg ?? 1) === 1;
+    const bgOpacity = Math.max(0, Math.min(1, (settings.bgOpacity ?? 100) / 100));
+    sphere.material.transparent = bgOpacity < 1;
+    sphere.material.opacity = bgOpacity;
   }
 
 
@@ -418,7 +478,7 @@ Object.assign(video.style, {
 
     // Sphere rotation for 360 video orientation (same for Safari and standalone PWA).
     // Standalone PWA landscape orientation fix is handled in DeviceOrientationControls.
-    sphere.rotation.y = Math.PI;
+    sphere.rotation.y = Math.PI - Math.PI / 2; // 180° + 90° yaw
 
 
   //   // ------- wireframe helper -------
@@ -428,22 +488,26 @@ Object.assign(video.style, {
   //   sphere.add(line);
 
   // ------- small center reticle -------
-  const reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.02, 0.024, 32),
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.5,
-    })
-  );
-  reticle.position.z = -1;
-  camera.add(reticle);
-  scene.add(camera);
+  // const reticle = new THREE.Mesh(
+  //   new THREE.RingGeometry(0.02, 0.024, 32),
+  //   new THREE.MeshBasicMaterial({
+  //     color: 0xffffff,
+  //     transparent: true,
+  //     opacity: 0.5,
+  //   })
+  // );
+  // reticle.position.z = -1;
+  // camera.add(reticle);
+  // scene.add(camera);
 
   enterBtn.addEventListener("click", enterVR);
   recenterBtn.addEventListener("click", recenter);
   fullscreenBtn.addEventListener("click", goFullscreen);
   playPauseBtn.addEventListener("click", playpause);
+  document.querySelectorAll(".video-btn").forEach((btn) => {
+    btn.addEventListener("click", () => switchVideo(btn.dataset.preset));
+    if (btn.dataset.preset === settings.bgPreset) btn.style.fontWeight = "bold";
+  });
   const scanQrHudBtn = document.getElementById("scan-qr-hud");
   if (scanQrBtn) scanQrBtn.addEventListener("click", startQrScan);
   if (scanQrHudBtn) scanQrHudBtn.addEventListener("click", startQrScan);
@@ -569,14 +633,14 @@ function animate() {
     video.videoWidth &&
     video.videoHeight
   ) {
-    if (
-      visibleCanvas.width !== video.videoWidth ||
-      visibleCanvas.height !== video.videoHeight
-    ) {
-      visibleCanvas.width = video.videoWidth;
-      visibleCanvas.height = video.videoHeight;
+    // Equirectangular 360° sphere expects 2:1 texture (360°×180°). Stretch any aspect to fill.
+    const h = video.videoHeight;
+    const w = 2 * h;
+    if (visibleCanvas.width !== w || visibleCanvas.height !== h) {
+      visibleCanvas.width = w;
+      visibleCanvas.height = h;
     }
-    visibleCtx.drawImage(video, 0, 0, visibleCanvas.width, visibleCanvas.height);
+    visibleCtx.drawImage(video, 0, 0, w, h);
     panoTex.needsUpdate = true;
   }
 
@@ -592,11 +656,27 @@ function startTextureUpdates() {
     if (stopUpdates) return;
 
     if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth && video.videoHeight) {
-      if (visibleCanvas.width !== video.videoWidth || visibleCanvas.height !== video.videoHeight) {
-        visibleCanvas.width = video.videoWidth;
-        visibleCanvas.height = video.videoHeight;
+      const h = video.videoHeight;
+      const w = 2 * h;
+      const dimsChanged = visibleCanvas.width !== w || visibleCanvas.height !== h;
+      if (dimsChanged) {
+        visibleCanvas.width = w;
+        visibleCanvas.height = h;
+        // Recreate texture when dimensions change - avoids WebGL texSubImage error
+        // (Three.js uses texSubImage for updates; uploading different size into existing texture fails)
+        if (panoTex) {
+          panoTex.dispose();
+        }
+        panoTex = new THREE.CanvasTexture(visibleCanvas);
+        panoTex.colorSpace = THREE.SRGBColorSpace;
+        panoTex.minFilter = THREE.LinearFilter;
+        panoTex.magFilter = THREE.LinearFilter;
+        panoTex.generateMipmaps = false;
+        if (sphere && sphere.material) {
+          sphere.material.map = panoTex;
+        }
       }
-      visibleCtx.drawImage(video, 0, 0, visibleCanvas.width, visibleCanvas.height);
+      visibleCtx.drawImage(video, 0, 0, w, h);
       panoTex.needsUpdate = true;
     }
 
@@ -609,10 +689,19 @@ function startTextureUpdates() {
   if (hasRVFC) {
     const loop = () => {
       if (stopUpdates) return;
-      video.requestVideoFrameCallback(() => {
-        drawFrame();
-        loop();
-      });
+      // When video is loading (e.g. after switch), RVFC won't fire - use rAF to keep polling
+      const ready = video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth;
+      if (ready) {
+        video.requestVideoFrameCallback(() => {
+          drawFrame();
+          loop();
+        });
+      } else {
+        requestAnimationFrame(() => {
+          drawFrame();
+          loop();
+        });
+      }
     };
     loop();
   } else {
@@ -646,14 +735,40 @@ function recenter() {
 }
 
 function playpause() {
-  //controls.alphaOffset = -camera.rotation.y;
-    if (video.paused) {
-        video.play();
-        {console.log("Video played");}
-    } else {
-        video.pause();
-        {console.log("Video paused");}
+  if (video.paused) {
+    video.play();
+  } else {
+    video.pause();
+  }
+}
+
+function switchVideo(presetKey) {
+  const src = BG_PRESET_VIDEOS[presetKey];
+  if (!src || !video) return;
+  video.src = src;
+  video.load();
+  // Clear canvas so the old video doesn't persist. When the new video loads, drawFrame will resize and redraw.
+  // Recreate texture when clearing to 1×1 to avoid WebGL texSubImage dimension mismatch.
+  if (visibleCanvas && visibleCtx) {
+    visibleCanvas.width = 1;
+    visibleCanvas.height = 1;
+    visibleCtx.fillStyle = "#000";
+    visibleCtx.fillRect(0, 0, 1, 1);
+    if (panoTex) {
+      panoTex.dispose();
+      panoTex = new THREE.CanvasTexture(visibleCanvas);
+      panoTex.colorSpace = THREE.SRGBColorSpace;
+      panoTex.minFilter = THREE.LinearFilter;
+      panoTex.magFilter = THREE.LinearFilter;
+      panoTex.generateMipmaps = false;
+      if (sphere && sphere.material) sphere.material.map = panoTex;
     }
+    panoTex.needsUpdate = true;
+  }
+  safePlay();
+  document.querySelectorAll(".video-btn").forEach((btn) => {
+    btn.style.fontWeight = btn.dataset.preset === presetKey ? "bold" : "";
+  });
 }
 
 

@@ -110,9 +110,50 @@ const DEFAULT_SETTINGS = {
   nodeLabel: 1,
 };
 
+/** Bridge format versions supported by VRPreview. Bump when adding new parsers. */
+const SUPPORTED_BRIDGE_VERSIONS = [1];
+
+/**
+ * Parse bridge format v1: { v: 1, nodes: [...], settings: {...} }
+ * Node: { yaw, pitch, size, color, name }
+ */
+function parseBridgeV1(obj) {
+  const arr = obj.nodes ?? [];
+  const settings = { ...DEFAULT_SETTINGS, ...(obj.settings ?? {}) };
+  const markers = arr.map((m) => {
+    const colorStr = m.color ?? m[3] ?? "ff0000";
+    const { color, opacity } = typeof colorStr === "number" ? { color: colorStr, opacity: 1 } : parseHexColor(colorStr);
+    return {
+      yaw: Number(m.yaw ?? m[0] ?? 0),
+      pitch: Number(m.pitch ?? m[1] ?? 0),
+      size: Number(m.size ?? m[2] ?? 2),
+      color,
+      opacity: m.opacity != null ? Number(m.opacity) : opacity,
+      distance: Number(m.distance ?? m[4] ?? 400),
+      name: m.name ?? m[5] ?? "",
+    };
+  });
+  return { markers, settings };
+}
+
+/**
+ * Dispatch to version-specific parser for bridge format { v, nodes, settings }.
+ * Legacy (no v) is treated as v1.
+ */
+function parseBridgeByVersion(obj) {
+  const v = obj.v;
+  const version = v != null ? Number(v) : 1; // legacy = v1
+  if (!SUPPORTED_BRIDGE_VERSIONS.includes(version)) {
+    console.warn(`VRPreview: QR bridge format v${version} not supported. Supported: ${SUPPORTED_BRIDGE_VERSIONS.join(", ")}. Update VRPreview or re-scan a newer QR.`);
+    return { markers: [], settings: { ...DEFAULT_SETTINGS } };
+  }
+  if (version === 1) return parseBridgeV1(obj);
+  return { markers: [], settings: { ...DEFAULT_SETTINGS } };
+}
+
 /**
  * Parse markers from a raw string (value of markers param).
- * Supports: JSON array [{}], JSON object { nodes: [], settings: {} }, or pipe-separated yaw,pitch,size|...
+ * Supports: bridge JSON { v, nodes, settings }, JSON array [{}], or pipe-separated yaw,pitch,size|...
  * Returns { markers: [], settings: {} }
  */
 function parseMarkersFromRawString(raw) {
@@ -123,22 +164,10 @@ function parseMarkersFromRawString(raw) {
   try {
     if (trimmed.startsWith("{")) {
       const obj = JSON.parse(trimmed);
-      const arr = obj.nodes ?? [];
-      const settings = { ...DEFAULT_SETTINGS, ...(obj.settings ?? {}) };
-      const markers = arr.map((m) => {
-        const colorStr = m.color ?? m[3] ?? "ff0000";
-        const { color, opacity } = typeof colorStr === "number" ? { color: colorStr, opacity: 1 } : parseHexColor(colorStr);
-        return {
-          yaw: Number(m.yaw ?? m[0] ?? 0),
-          pitch: Number(m.pitch ?? m[1] ?? 0),
-          size: Number(m.size ?? m[2] ?? 2),
-          color,
-          opacity: m.opacity != null ? Number(m.opacity) : opacity,
-          distance: Number(m.distance ?? m[4] ?? 400),
-          name: m.name ?? m[5] ?? "",
-        };
-      });
-      return { markers, settings };
+      if (obj.nodes != null || obj.settings != null) {
+        return parseBridgeByVersion(obj);
+      }
+      return empty;
     }
     if (trimmed.startsWith("[")) {
       const arr = JSON.parse(trimmed);

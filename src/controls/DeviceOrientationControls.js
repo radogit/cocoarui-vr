@@ -62,6 +62,7 @@ class DeviceOrientationControls extends EventDispatcher {
     this.orientAtCapture = null; // screen orientation (rad) when alphaForward was captured
     this.alphaLaunchCorrection = 0; // yaw correction when launched in landscape (rad)
     this._launchedInLandscape = null; // set on first update: true if landscape, false if portrait
+    this._alphaLaunchCorrectionFixed = null; // set once at first frame when launched in landscape
     this.debugLog = opts.debug || (typeof window !== 'undefined' &&
       (/[?&]debug=orientation/i.test(window.location.search) ||
        /[?&]debug=orientation/i.test(window.location.hash)));
@@ -211,6 +212,7 @@ class DeviceOrientationControls extends EventDispatcher {
       const alpha = MathUtils.degToRad(alphaDeg) + this.alphaOffset;
       this._logOrientation('RECENTER', alphaDeg, device.beta, device.gamma, alpha, beta, gamma, orient);
       this.alphaLaunchCorrection = 0; // baked into alphaOffset
+      this._alphaLaunchCorrectionFixed = null; // reset so next launch can recompute
     }
   }
 
@@ -236,10 +238,15 @@ class DeviceOrientationControls extends EventDispatcher {
       }
       if (inLandscape) {
         if (this._launchedInLandscape) {
-          // Launched in landscape: device.alpha needs -90°; when beta near 0 add 180° (fix reversed)
-          const betaAbs = Math.abs(betaDeg ?? 0);
-          this.alphaLaunchCorrection = -Math.PI / 2;
-          if (betaAbs < 90) this.alphaLaunchCorrection += Math.PI;
+          // Launched in landscape: device.alpha needs -90°; when beta near 0 add 180° (fix reversed).
+          // Set correction ONCE at first frame — recomputing per-frame causes flip when beta crosses 90°
+          // (e.g. phone in VR headset at horizon cusp, beta oscillates).
+          if (this._alphaLaunchCorrectionFixed == null) {
+            const betaAbs = Math.abs(betaDeg ?? 0);
+            this._alphaLaunchCorrectionFixed = -Math.PI / 2;
+            if (betaAbs < 90) this._alphaLaunchCorrectionFixed += Math.PI;
+          }
+          this.alphaLaunchCorrection = this._alphaLaunchCorrectionFixed;
         } else {
           // Rotated portrait→landscape: device.alpha is correct, no correction
           this.alphaLaunchCorrection = 0;

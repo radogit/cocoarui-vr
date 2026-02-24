@@ -33,6 +33,9 @@ const qrVideo = document.getElementById("qr-video");
 const qrCanvas = document.getElementById("qr-canvas");
 const qrClearStored = document.getElementById("qr-clear-stored");
 const clearQrBtn = document.getElementById("clear-qr");
+const toggleAxisBtn = document.getElementById("toggle-axis");
+const toggleGridVBtn = document.getElementById("toggle-grid-v");
+const toggleGridHBtn = document.getElementById("toggle-grid-h");
 
 const appRoot = document.getElementById('app-root');
 
@@ -58,6 +61,9 @@ function updateOrientationUI() {
 
 let scene, camera, renderer, effect, controls;
 let inVRMode = false; // true after user has entered VR
+let axisGroup = null;
+let gridVGroup = null;
+let gridHGroup = null;
 let wakeLockSentinel = null;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
@@ -324,6 +330,128 @@ function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000
   return group.children.length > 0 ? group : null;
 }
 
+/** Convert (yaw, pitch) in degrees to Vector3 at given distance. Same convention as createMarkerSphere. */
+function yawPitchToPosition(yawDeg, pitchDeg, distance) {
+  const azimuth = THREE.MathUtils.degToRad(yawDeg);
+  const elevation = THREE.MathUtils.degToRad(pitchDeg);
+  return new THREE.Vector3(
+    Math.sin(azimuth) * Math.cos(elevation) * distance,
+    Math.sin(elevation) * distance,
+    -Math.cos(azimuth) * Math.cos(elevation) * distance
+  );
+}
+
+/** Create axis tick label. offsetYaw, offsetPitch: degrees to shift label from tick (e.g. -12 for below/left). */
+function createAxisTickLabel(text, yaw, pitch, distance, offsetYaw = 0, offsetPitch = 0) {
+  const pos = yawPitchToPosition(yaw + offsetYaw, pitch + offsetPitch, distance);
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgba(0,0,0,0)";
+  ctx.fillRect(0, 0, size, size);
+  ctx.font = "normal 120px sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "black";
+  ctx.strokeStyle = "black";
+  ctx.lineWidth = 0;
+  ctx.strokeText(text, size / 2, size / 2);
+  ctx.fillText(text, size / 2, size / 2);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    opacity: 0.98,
+    side: THREE.DoubleSide,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const labelSize = 40;
+  const geom = new THREE.PlaneGeometry(labelSize, labelSize);
+  const plane = new THREE.Mesh(geom, mat);
+  plane.position.copy(pos).multiplyScalar((distance - 10) / distance);
+  labelPlanes.push(plane);
+  return plane;
+}
+
+/** X-axis tick: stripe below axis (pitch -1.5 to 0). Y-axis tick: stripe left of axis (yaw -1.5 to 0). */
+function createTickStripe(yaw, pitch, dist, axisType, stripeLength = 1.5) {
+  const p1 = axisType === "x"
+    ? yawPitchToPosition(yaw, pitch - stripeLength, dist)
+    : yawPitchToPosition(yaw - stripeLength, pitch, dist);
+  const p2 = axisType === "x"
+    ? yawPitchToPosition(yaw, pitch, dist)
+    : yawPitchToPosition(yaw, pitch, dist);
+  const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+  return new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0x000000 }));
+}
+
+/** Create grid lines every 10° from -90 to +90. Returns { group, gridVGroup, gridHGroup } for independent visibility toggling. */
+function createGridLines() {
+  const dist = 450;
+  const steps = 36;
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.7 });
+  const group = new THREE.Group();
+  const gridVGroup = new THREE.Group();
+  const gridHGroup = new THREE.Group();
+  for (let yaw = -90; yaw <= 90; yaw += 10) {
+    const points = [];
+    for (let i = 0; i <= steps; i++) {
+      const pitch = -90 + (180 * i) / steps;
+      points.push(yawPitchToPosition(yaw, pitch, dist));
+    }
+    gridVGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMat));
+  }
+  for (let pitch = -90; pitch <= 90; pitch += 10) {
+    const points = [];
+    for (let i = 0; i <= steps; i++) {
+      const yaw = -90 + (180 * i) / steps;
+      points.push(yawPitchToPosition(yaw, pitch, dist));
+    }
+    gridHGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), lineMat));
+  }
+  group.add(gridVGroup);
+  group.add(gridHGroup);
+  return { group, gridVGroup, gridHGroup };
+}
+
+/** Create axis lines (-90 to 90 yaw and pitch) with tick stripes every 20°. Always returns a group; visibility set by caller. */
+function createAxisLines() {
+  const dist = 450; // inside video sphere (radius 500)
+  const steps = 36; // points per line
+  const tickValues = [-80, -60, -40, -20, 20, 40, 60, 80];
+  const labelOffset = 3; // degrees to place label below/left of tick
+  const horizPoints = [];
+  const vertPoints = [];
+  for (let i = 0; i <= steps; i++) {
+    const yaw = -90 + (180 * i) / steps;
+    horizPoints.push(yawPitchToPosition(yaw, 0, dist));
+  }
+  for (let i = 0; i <= steps; i++) {
+    const pitch = -90 + (180 * i) / steps;
+    vertPoints.push(yawPitchToPosition(0, pitch, dist));
+  }
+  const horizGeom = new THREE.BufferGeometry().setFromPoints(horizPoints);
+  const vertGeom = new THREE.BufferGeometry().setFromPoints(vertPoints);
+  const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9 });
+  const group = new THREE.Group();
+  group.add(new THREE.Line(horizGeom, lineMat));
+  group.add(new THREE.Line(vertGeom, lineMat));
+  for (const v of tickValues) {
+    group.add(createTickStripe(v, 0, dist, "x")); // x-axis: tick below
+    group.add(createAxisTickLabel(String(v), v, 0, dist, 0, -labelOffset)); // label below tick
+  }
+  for (const v of tickValues) {
+    if (v === 0) continue; // center already labeled by horizontal axis
+    group.add(createTickStripe(0, v, dist, "y")); // y-axis: tick to the left
+    group.add(createAxisTickLabel(String(v), 0, v, dist, -labelOffset, 0)); // label left of tick
+  }
+  return group;
+}
+
 let qrStream = null;
 let qrAnimationId = null;
 
@@ -421,6 +549,7 @@ function init() {
 
 
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xffffff); // white behind video when opacity < 1
 
   camera = new THREE.PerspectiveCamera(
     75,
@@ -518,6 +647,15 @@ Object.assign(video.style, {
     // const mesh = createMarkerSphere({ yaw: -30, pitch: 10, size: 1.4, distance: 400, color: 0xff0000 }, settings);
     // if (mesh) scene.add(mesh);
   }
+  axisGroup = createAxisLines();
+  scene.add(axisGroup);
+  axisGroup.visible = (settings.axis ?? 0) === 1;
+  const { group: gridGroup, gridVGroup: gV, gridHGroup: gH } = createGridLines();
+  gridVGroup = gV;
+  gridHGroup = gH;
+  scene.add(gridGroup);
+  gridVGroup.visible = (settings.gridV ?? 0) === 1;
+  gridHGroup.visible = (settings.gridH ?? 0) === 1;
   // Apply settings: background sphere visibility and opacity
   if (sphere && sphere.material) {
     sphere.visible = (settings.bg ?? 1) === 1;
@@ -585,6 +723,37 @@ Object.assign(video.style, {
     addToHomescreenTipClose.addEventListener("click", () => {
       addToHomescreenTip?.classList.remove("visible");
       sessionStorage.setItem("addToHomescreenTipDismissed", "1");
+    });
+  }
+  // Axis / grid toggle buttons
+  function syncToggleButton(btn, visible) {
+    if (btn) btn.classList.toggle("active", !!visible);
+  }
+  syncToggleButton(toggleAxisBtn, axisGroup?.visible);
+  syncToggleButton(toggleGridVBtn, gridVGroup?.visible);
+  syncToggleButton(toggleGridHBtn, gridHGroup?.visible);
+  if (toggleAxisBtn) {
+    toggleAxisBtn.addEventListener("click", () => {
+      if (axisGroup) {
+        axisGroup.visible = !axisGroup.visible;
+        syncToggleButton(toggleAxisBtn, axisGroup.visible);
+      }
+    });
+  }
+  if (toggleGridVBtn) {
+    toggleGridVBtn.addEventListener("click", () => {
+      if (gridVGroup) {
+        gridVGroup.visible = !gridVGroup.visible;
+        syncToggleButton(toggleGridVBtn, gridVGroup.visible);
+      }
+    });
+  }
+  if (toggleGridHBtn) {
+    toggleGridHBtn.addEventListener("click", () => {
+      if (gridHGroup) {
+        gridHGroup.visible = !gridHGroup.visible;
+        syncToggleButton(toggleGridHBtn, gridHGroup.visible);
+      }
     });
   }
   updateOrientationUI();

@@ -59,6 +59,8 @@
       position:fixed; left:12px; bottom:12px; display:flex; gap:8px; z-index:10;
     }
     #hud button { opacity:.85; }
+    #hud button.hud-toggle { background:rgba(255,255,255,.2); color:rgba(255,255,255,.8); border:1px solid rgba(255,255,255,.3); }
+    #hud button.hud-toggle.active { background:rgba(74,158,74,.9); color:#fff; border-color:rgba(255,255,255,.5); }
     canvas.webgl {
       display:block;
       width:100%;
@@ -256,6 +258,9 @@
       <button id="recenter" hidden>Recenter</button>
       <button id="fullscreen" hidden>Fullscreen</button>
       <button id="playpause">Play/Pause</button>
+      <button id="toggle-axis" class="hud-toggle" title="Show/hide axis">Axis</button>
+      <button id="toggle-grid-v" class="hud-toggle" title="Show/hide vertical grid">Grid V</button>
+      <button id="toggle-grid-h" class="hud-toggle" title="Show/hide horizontal grid">Grid H</button>
       <button id="video-vr-uphill" class="video-btn" data-preset="vr-uphill">VR↑</button>
       <button id="video-vr-downhill" class="video-btn" data-preset="vr-downhill">VR↓</button>
       <button id="video-base-uphill" class="video-btn" data-preset="base-uphill">PP↑</button>

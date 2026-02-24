@@ -386,8 +386,8 @@ function createAxisTickLabel(text, yaw, pitch, distance, offsetYaw = 0, offsetPi
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "rgba(0,0,0,0)";
   ctx.fillRect(0, 0, size, size);
-  ctx.font = "normal 120px sans-serif";
-  ctx.textAlign = "center";
+  ctx.font = "normal 180px sans-serif";
+  ctx.textAlign = "right";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "black";
   ctx.strokeStyle = "white";
@@ -401,13 +401,13 @@ function createAxisTickLabel(text, yaw, pitch, distance, offsetYaw = 0, offsetPi
     transparent: true,
     opacity: 0.98,
     side: THREE.DoubleSide,
-    depthTest: false,
-    depthWrite: false,
+    depthTest: true,
+    depthWrite: true,
   });
   const labelSize = 40;
   const geom = new THREE.PlaneGeometry(labelSize, labelSize);
   const plane = new THREE.Mesh(geom, mat);
-  plane.position.copy(pos).multiplyScalar((distance - 10) / distance);
+  plane.position.copy(pos).multiplyScalar((distance + 15) / distance);
   labelPlanes.push(plane);
   return plane;
 }
@@ -455,7 +455,7 @@ function createGridLines() {
 
 /** Create axis lines (-90 to 90 yaw and pitch) with tick stripes every 20°. Always returns a group; visibility set by caller. */
 function createAxisLines() {
-  const dist = 450; // inside video sphere (radius 500)
+  const dist = 600; // inside video sphere (radius 500)
   const steps = 36; // points per line
   const tickValues = [-80, -60, -40, -20, 20, 40, 60, 80];
   const labelOffset = 3; // degrees to place label below/left of tick
@@ -473,8 +473,12 @@ function createAxisLines() {
   const vertGeom = new THREE.BufferGeometry().setFromPoints(vertPoints);
   const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9 });
   const group = new THREE.Group();
-  group.add(new THREE.Line(horizGeom, lineMat));
-  group.add(new THREE.Line(vertGeom, lineMat));
+  const horizLine = new THREE.Line(horizGeom, lineMat);
+  const vertLine = new THREE.Line(vertGeom, lineMat);
+  horizLine.renderOrder = 1;
+  vertLine.renderOrder = 1;
+  group.add(horizLine);
+  group.add(vertLine);
   for (const v of tickValues) {
     group.add(createTickStripe(v, 0, dist, "x")); // x-axis: tick below
     group.add(createAxisTickLabel(String(v), v, 0, dist, 0, -labelOffset)); // label below tick
@@ -661,7 +665,7 @@ Object.assign(video.style, {
 
   // ---------- 360 sphere --------------------
 
-  const geom = new THREE.SphereGeometry(500, 64, 64);
+  const geom = new THREE.SphereGeometry(1000, 64, 64);
 
   const mat = new THREE.MeshBasicMaterial({
     map: panoTex,
@@ -669,6 +673,21 @@ Object.assign(video.style, {
   });
 
   sphere = new THREE.Mesh(geom, mat);
+  sphere.renderOrder = 0;
+
+  // --- Axis and grid added before sphere so they render in front (closer to camera at 450 vs sphere at 500) ---
+  axisGroup = createAxisLines();
+  axisGroup.renderOrder = 2;
+  axisGroup.visible = (settings.axis ?? 0) === 1;
+  scene.add(axisGroup);
+  const { group: gridGroup, gridVGroup: gV, gridHGroup: gH } = createGridLines();
+  gridVGroup = gV;
+  gridHGroup = gH;
+  gridGroup.renderOrder = 2;
+  gridVGroup.visible = (settings.gridV ?? 0) === 1;
+  gridHGroup.visible = (settings.gridH ?? 0) === 1;
+  scene.add(gridGroup);
+
   scene.add(sphere);
 
   // --- Markers from URL param / QR scan (parsed above) ---
@@ -682,15 +701,6 @@ Object.assign(video.style, {
     // const mesh = createMarkerSphere({ yaw: -30, pitch: 10, size: 1.4, distance: 400, color: 0xff0000 }, settings);
     // if (mesh) scene.add(mesh);
   }
-  axisGroup = createAxisLines();
-  scene.add(axisGroup);
-  axisGroup.visible = (settings.axis ?? 0) === 1;
-  const { group: gridGroup, gridVGroup: gV, gridHGroup: gH } = createGridLines();
-  gridVGroup = gV;
-  gridHGroup = gH;
-  scene.add(gridGroup);
-  gridVGroup.visible = (settings.gridV ?? 0) === 1;
-  gridHGroup.visible = (settings.gridH ?? 0) === 1;
   // Apply settings: background sphere visibility and opacity
   if (sphere && sphere.material) {
     sphere.visible = (settings.bg ?? 1) === 1;

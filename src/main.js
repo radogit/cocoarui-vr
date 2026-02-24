@@ -51,13 +51,14 @@ function isLandscape() {
 function updateOrientationUI() {
   const landscape = isLandscape();
   if (!inVRMode) {
-    // Initial screen: always show buttons
+    // Initial screen: always show buttons, hide HUD until user enters VR
     if (uiButtons) uiButtons.hidden = false;
+    if (hud) hud.classList.add("hidden");
   } else {
     // VR mode: landscape = show VR, portrait = show landscape-required overlay
     if (vrLandscapeOverlay) vrLandscapeOverlay.hidden = landscape;
     if (appRoot) appRoot.style.visibility = landscape ? "" : "hidden";
-    if (hud) hud.hidden = !landscape;
+    if (hud) (landscape ? hud.classList.remove("hidden") : hud.classList.add("hidden"));
     if (addToHomescreenTip && !landscape) addToHomescreenTip.classList.remove("visible");
   }
 }
@@ -663,7 +664,7 @@ Object.assign(video.style, {
   if (sphere && sphere.material) {
     sphere.visible = (settings.bg ?? 1) === 1;
     const bgOpacity = Math.max(0, Math.min(1, (settings.bgOpacity ?? 100) / 100));
-    sphere.material.transparent = bgOpacity < 1;
+    sphere.material.transparent = true; // always allow opacity changes for slider
     sphere.material.opacity = bgOpacity;
   }
 
@@ -731,11 +732,11 @@ Object.assign(video.style, {
   if (hudDrawerHandle && hudDrawer) {
     hudDrawerHandle.addEventListener("click", () => hudDrawer.classList.toggle("collapsed"));
   }
-  if (bgOpacitySlider && sphere) {
-    bgOpacitySlider.value = String(settings.bgOpacity ?? 100);
+  if (bgOpacitySlider && sphere?.material) {
+    const initialOpacity = Math.max(0, Math.min(100, settings.bgOpacity ?? 100));
+    bgOpacitySlider.value = String(initialOpacity);
     bgOpacitySlider.addEventListener("input", () => {
       const v = Math.max(0, Math.min(1, Number(bgOpacitySlider.value) / 100));
-      sphere.material.transparent = v < 1;
       sphere.material.opacity = v;
     });
   }

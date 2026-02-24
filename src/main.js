@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { DeviceOrientationControls } from "./controls/DeviceOrientationControls.js";
+import { iconByKey, loadIconTexture } from "./icons.js";
 import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
 import jsQR from "jsqr";
 import videoFile from "./assets/city_webgl.mp4";
@@ -36,6 +37,9 @@ const clearQrBtn = document.getElementById("clear-qr");
 const toggleAxisBtn = document.getElementById("toggle-axis");
 const toggleGridVBtn = document.getElementById("toggle-grid-v");
 const toggleGridHBtn = document.getElementById("toggle-grid-h");
+const toggleNodeCirclesBtn = document.getElementById("toggle-node-circles");
+const toggleNodeLabelsBtn = document.getElementById("toggle-node-labels");
+const toggleNodeIconsBtn = document.getElementById("toggle-node-icons");
 const hudDrawer = document.getElementById("hud-drawer");
 const hudDrawerHandle = document.getElementById("hud-drawer-handle");
 const bgOpacitySlider = document.getElementById("bg-opacity-slider");
@@ -68,6 +72,10 @@ let inVRMode = false; // true after user has entered VR
 let axisGroup = null;
 let gridVGroup = null;
 let gridHGroup = null;
+/** Marker groups (each has children with userData.type: 'sphere'|'label'|'icon'). */
+const markerGroups = [];
+/** Current node visibility settings, updated by HUD toggles. */
+let nodeSettings = { nodeCircles: 1, nodeLabel: 1, nodeIcon: 1 };
 let wakeLockSentinel = null;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
@@ -324,14 +332,52 @@ function createLabelMesh(text, radius, position, distance) {
 }
 
 /**
- * Create a sphere marker at polar coords (yaw, pitch) with angular size.
- * size = angular diameter in degrees. radius = distance * tan(size/2).
- * Optional name: displayed as billboard label inside the sphere.
- * @param {Object} settings - { nodeCircles, nodeLabel } from QR payload
+ * Create an icon plane (billboard) in front of the sphere. Uses loaded texture.
  */
-function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1, name }, settings = {}) {
+function createIconPlane(texture, radius, position, distance) {
+  const mat = new THREE.MeshBasicMaterial({
+    map: texture,
+    transparent: true,
+    opacity: 0.95,
+    side: THREE.DoubleSide,
+    depthTest: true,
+    depthWrite: true,
+  });
+  const iconSize = radius * 1.4;
+  const geom = new THREE.PlaneGeometry(iconSize, iconSize);
+  const plane = new THREE.Mesh(geom, mat);
+  const frontDist = Math.max(0.1, distance - radius - 0.02);
+  plane.position.copy(position).multiplyScalar(frontDist / distance);
+  labelPlanes.push(plane);
+  return plane;
+}
+
+/**
+ * Apply node visibility settings to all marker groups.
+ */
+function applyNodeVisibility() {
+  const showCircle = (nodeSettings.nodeCircles ?? 1) === 1;
+  const showLabel = (nodeSettings.nodeLabel ?? 1) === 1;
+  const showIcon = (nodeSettings.nodeIcon ?? 1) === 1;
+  for (const group of markerGroups) {
+    for (const child of group.children) {
+      const t = child.userData?.type;
+      if (t === "sphere") child.visible = showCircle;
+      else if (t === "label") child.visible = showLabel;
+      else if (t === "icon") child.visible = showIcon;
+    }
+  }
+}
+
+/**
+ * Create a sphere marker at polar coords (yaw, pitch) with angular size.
+ * Always creates sphere; label and icon when data exists. Visibility controlled by settings (toggleable via HUD).
+ * @param {Object} settings - { nodeCircles, nodeLabel, nodeIcon } from QR payload
+ */
+async function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000, opacity = 1, name, representation }, settings = {}) {
   const showCircle = (settings.nodeCircles ?? 1) === 1;
   const showLabel = (settings.nodeLabel ?? 1) === 1;
+  const showIcon = (settings.nodeIcon ?? 1) === 1;
   const cappedDist = Math.min(distance, VIDEO_SPHERE_RADIUS - 1);
   const azimuth = THREE.MathUtils.degToRad(yaw);
   const elevation = THREE.MathUtils.degToRad(pitch);
@@ -343,26 +389,45 @@ function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0xff0000
     -Math.cos(azimuth) * Math.cos(elevation) * cappedDist
   );
   const group = new THREE.Group();
-  if (showCircle) {
-    const geom = new THREE.SphereGeometry(radius, 32, 32);
-    const clampedOpacity = Math.max(0, Math.min(1, opacity));
-    const mat = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: clampedOpacity,
-      depthWrite: clampedOpacity >= 1,
-      depthTest: true,
-    });
-    const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.copy(pos);
-    group.add(mesh);
-  }
+  // Sphere (always)
+  const geom = new THREE.SphereGeometry(radius, 32, 32);
+  const clampedOpacity = Math.max(0, Math.min(1, opacity));
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: clampedOpacity,
+    depthWrite: clampedOpacity >= 1,
+    depthTest: true,
+  });
+  const sphereMesh = new THREE.Mesh(geom, mat);
+  sphereMesh.position.copy(pos);
+  sphereMesh.userData = { type: "sphere" };
+  sphereMesh.visible = showCircle;
+  group.add(sphereMesh);
   group.renderOrder = 1;
-  if (showLabel && name && name.trim()) {
+  // Label (if name)
+  if (name && name.trim()) {
     const label = createLabelMesh(name.trim(), radius, pos, cappedDist);
+    label.userData = { type: "label" };
+    label.visible = showLabel;
     group.add(label);
   }
-  return group.children.length > 0 ? group : null;
+  // Icon (if representation)
+  if (representation && representation !== "none") {
+    const url = iconByKey[representation];
+    if (url) {
+      try {
+        const tex = await loadIconTexture(url);
+        const iconPlane = createIconPlane(tex, radius, pos, cappedDist);
+        iconPlane.userData = { type: "icon" };
+        iconPlane.visible = showIcon;
+        group.add(iconPlane);
+      } catch (_) {
+        // ignore load errors
+      }
+    }
+  }
+  return group;
 }
 
 /** Convert (yaw, pitch) in degrees to Vector3 at given distance. Same convention as createMarkerSphere. */
@@ -574,9 +639,9 @@ function tickQrScan() {
   qrAnimationId = requestAnimationFrame(tickQrScan);
 }
 
-init();
+init().catch((e) => console.error("Init error:", e));
 
-function init() {
+async function init() {
   // --- keep video alive on PWA focus / rotation ---
     document.addEventListener("visibilitychange", () => {
     if (!document.hidden) safePlay();
@@ -691,11 +756,19 @@ Object.assign(video.style, {
   scene.add(sphere);
 
   // --- Markers from URL param / QR scan (parsed above) ---
+  nodeSettings = {
+    nodeCircles: (settings.nodeCircles ?? 1) === 1 ? 1 : 0,
+    nodeLabel: (settings.nodeLabel ?? 1) === 1 ? 1 : 0,
+    nodeIcon: (settings.nodeIcon ?? 1) === 1 ? 1 : 0,
+  };
   if (markers.length > 0) {
-    markers.forEach((m) => {
-      const mesh = createMarkerSphere(m, settings);
-      if (mesh) scene.add(mesh);
-    });
+    for (const m of markers) {
+      const mesh = await createMarkerSphere(m, settings);
+      if (mesh) {
+        markerGroups.push(mesh);
+        scene.add(mesh);
+      }
+    }
   } else {
     // Fallback: one red sphere (same as before)
     // const mesh = createMarkerSphere({ yaw: -30, pitch: 10, size: 1.4, distance: 400, color: 0xff0000 }, settings);
@@ -788,6 +861,9 @@ Object.assign(video.style, {
   syncToggleButton(toggleAxisBtn, axisGroup?.visible);
   syncToggleButton(toggleGridVBtn, gridVGroup?.visible);
   syncToggleButton(toggleGridHBtn, gridHGroup?.visible);
+  syncToggleButton(toggleNodeCirclesBtn, nodeSettings.nodeCircles === 1);
+  syncToggleButton(toggleNodeLabelsBtn, nodeSettings.nodeLabel === 1);
+  syncToggleButton(toggleNodeIconsBtn, nodeSettings.nodeIcon === 1);
   if (toggleAxisBtn) {
     toggleAxisBtn.addEventListener("click", () => {
       if (axisGroup) {
@@ -810,6 +886,27 @@ Object.assign(video.style, {
         gridHGroup.visible = !gridHGroup.visible;
         syncToggleButton(toggleGridHBtn, gridHGroup.visible);
       }
+    });
+  }
+  if (toggleNodeCirclesBtn) {
+    toggleNodeCirclesBtn.addEventListener("click", () => {
+      nodeSettings.nodeCircles = nodeSettings.nodeCircles === 1 ? 0 : 1;
+      applyNodeVisibility();
+      syncToggleButton(toggleNodeCirclesBtn, nodeSettings.nodeCircles === 1);
+    });
+  }
+  if (toggleNodeLabelsBtn) {
+    toggleNodeLabelsBtn.addEventListener("click", () => {
+      nodeSettings.nodeLabel = nodeSettings.nodeLabel === 1 ? 0 : 1;
+      applyNodeVisibility();
+      syncToggleButton(toggleNodeLabelsBtn, nodeSettings.nodeLabel === 1);
+    });
+  }
+  if (toggleNodeIconsBtn) {
+    toggleNodeIconsBtn.addEventListener("click", () => {
+      nodeSettings.nodeIcon = nodeSettings.nodeIcon === 1 ? 0 : 1;
+      applyNodeVisibility();
+      syncToggleButton(toggleNodeIconsBtn, nodeSettings.nodeIcon === 1);
     });
   }
   updateOrientationUI();

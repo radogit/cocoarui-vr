@@ -10,4 +10,5 @@ README_dev.txt
 ignore
 .parcel-cache
 *.pem
+cert-extensions.cnf
 *.mp4

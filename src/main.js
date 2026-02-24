@@ -354,6 +354,27 @@ function stopQrScan() {
   if (qrScanner) qrScanner.hidden = true;
 }
 
+function showQrScanSuccess(nodeCount) {
+  const overlay = document.createElement("div");
+  overlay.className = "qr-overlay qr-scan-success";
+  overlay.style.cssText = "display:flex; flex-direction:column; justify-content:center; align-items:center; gap:16px; background:rgba(0,0,0,.9); color:#fff; font-family:ui-sans-serif,system-ui,-apple-system,Arial; text-align:center; padding:24px;";
+  const msg = document.createElement("div");
+  msg.style.fontSize = "20px";
+  msg.style.fontWeight = "600";
+  msg.textContent = "Scan successful!";
+  const count = document.createElement("div");
+  count.style.fontSize = "16px";
+  count.style.opacity = "0.9";
+  count.textContent = `${nodeCount} node${nodeCount === 1 ? "" : "s"} loaded.`;
+  overlay.appendChild(msg);
+  overlay.appendChild(count);
+  document.body.appendChild(overlay);
+  setTimeout(() => {
+    overlay.remove();
+    window.location.reload();
+  }, 2000);
+}
+
 function tickQrScan() {
   if (!qrVideo || !qrCanvas || qrVideo.readyState !== qrVideo.HAVE_ENOUGH_DATA) {
     qrAnimationId = requestAnimationFrame(tickQrScan);
@@ -379,7 +400,7 @@ function tickQrScan() {
     if (markers.length > 0 || data.startsWith("[") || data.startsWith("{") || data.includes("|") || data.includes("markers=")) {
       localStorage.setItem(STORAGE_KEY_QR_MARKERS, data);
       stopQrScan();
-      window.location.reload();
+      showQrScanSuccess(markers.length);
       return;
     }
   }

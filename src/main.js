@@ -61,7 +61,14 @@ let inVRMode = false; // true after user has entered VR
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
+let lastVideoTime = -1; // for detecting loop restart (ended doesn't fire when loop=true)
 const labelPlanes = []; // billboard labels, updated each frame to face camera
+
+/** Whether to flip the video texture left-to-right on each loop. Controlled by #flip-on-loop checkbox. */
+function getFlipOnLoop() {
+  const el = document.getElementById("flip-on-loop");
+  return el ? el.checked : true;
+}
 const VIDEO_SPHERE_RADIUS = 500;
 
 /**
@@ -444,7 +451,6 @@ Object.assign(video.style, {
   });
   document.body.appendChild(video);
 
-
   // ---------- Visible canvas - mini 2D player ----------
   visibleCanvas = document.createElement("canvas");
   visibleCanvas.id = "2DVideoCanvas";
@@ -464,12 +470,12 @@ Object.assign(video.style, {
   panoTex.minFilter = THREE.LinearFilter;
   panoTex.magFilter = THREE.LinearFilter;
   panoTex.generateMipmaps = false;
-
+  panoTex.wrapS = THREE.RepeatWrapping;
+  panoTex.repeat.x = -1; // mirror texture left-to-right
 
   // ---------- 360 sphere --------------------
 
   const geom = new THREE.SphereGeometry(500, 64, 64);
-  //geom.scale(-1, 1, 1);
 
   const mat = new THREE.MeshBasicMaterial({
     map: panoTex,
@@ -701,12 +707,26 @@ function startTextureUpdates() {
         panoTex.minFilter = THREE.LinearFilter;
         panoTex.magFilter = THREE.LinearFilter;
         panoTex.generateMipmaps = false;
+        panoTex.wrapS = THREE.RepeatWrapping;
+        panoTex.repeat.x = -1;
         if (sphere && sphere.material) {
           sphere.material.map = panoTex;
         }
       }
       visibleCtx.drawImage(video, 0, 0, w, h);
       panoTex.needsUpdate = true;
+
+      // Detect loop restart (ended doesn't fire when video.loop=true)
+      if (getFlipOnLoop()) {
+        const t = video.currentTime;
+        const d = video.duration;
+        if (d > 0 && lastVideoTime >= d - 0.15 && t < 0.15) {
+          panoTex.repeat.x = -panoTex.repeat.x;
+        }
+        lastVideoTime = t;
+      } else {
+        lastVideoTime = video.currentTime;
+      }
     }
 
     if (!hasRVFC) {
@@ -774,6 +794,7 @@ function playpause() {
 function switchVideo(presetKey) {
   const src = BG_PRESET_VIDEOS[presetKey];
   if (!src || !video) return;
+  lastVideoTime = -1; // reset so new video starts from default orientation
   video.src = src;
   video.load();
   // Clear canvas so the old video doesn't persist. When the new video loads, drawFrame will resize and redraw.
@@ -790,6 +811,8 @@ function switchVideo(presetKey) {
       panoTex.minFilter = THREE.LinearFilter;
       panoTex.magFilter = THREE.LinearFilter;
       panoTex.generateMipmaps = false;
+      panoTex.wrapS = THREE.RepeatWrapping;
+      panoTex.repeat.x = -1;
       if (sphere && sphere.material) sphere.material.map = panoTex;
     }
     panoTex.needsUpdate = true;

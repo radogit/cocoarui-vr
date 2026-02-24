@@ -36,6 +36,9 @@ const clearQrBtn = document.getElementById("clear-qr");
 const toggleAxisBtn = document.getElementById("toggle-axis");
 const toggleGridVBtn = document.getElementById("toggle-grid-v");
 const toggleGridHBtn = document.getElementById("toggle-grid-h");
+const hudDrawer = document.getElementById("hud-drawer");
+const hudDrawerHandle = document.getElementById("hud-drawer-handle");
+const bgOpacitySlider = document.getElementById("bg-opacity-slider");
 
 const appRoot = document.getElementById('app-root');
 
@@ -723,6 +726,17 @@ Object.assign(video.style, {
     addToHomescreenTipClose.addEventListener("click", () => {
       addToHomescreenTip?.classList.remove("visible");
       sessionStorage.setItem("addToHomescreenTipDismissed", "1");
+    });
+  }
+  if (hudDrawerHandle && hudDrawer) {
+    hudDrawerHandle.addEventListener("click", () => hudDrawer.classList.toggle("collapsed"));
+  }
+  if (bgOpacitySlider && sphere) {
+    bgOpacitySlider.value = String(settings.bgOpacity ?? 100);
+    bgOpacitySlider.addEventListener("input", () => {
+      const v = Math.max(0, Math.min(1, Number(bgOpacitySlider.value) / 100));
+      sphere.material.transparent = v < 1;
+      sphere.material.opacity = v;
     });
   }
   // Axis / grid toggle buttons

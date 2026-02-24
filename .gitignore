@@ -2,6 +2,7 @@
 node_modules
 .cache
 dist/
+scripts/
 .DS_Store
 README_dev.txt
 ignore

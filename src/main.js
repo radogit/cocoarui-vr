@@ -3,8 +3,8 @@ import { DeviceOrientationControls } from "./controls/DeviceOrientationControls.
 import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
 import jsQR from "jsqr";
 import videoFile from "./assets/city_webgl.mp4";
-import VRAscentVideo from "./assets/uphil2-Sallandse_Heuvelrug_(more2)_VIRB_V1380254-5-uphill4(1m21s).mp4";
-import VRDescentVideo from "./assets/VRDescentVideo.mp4"; //Sallandse_Heuvelrug_video_1_cropped.mp4
+import VRAscentVideo from "./assets/VRAscentVideo.mp4";
+import VRDescentVideo from "./assets/VRDescentVideo.mp4";
 import PPAscentVideo from "./assets/final-PPA-70s,20kph,400m,60mRise.mp4";
 import PPDescentVideo from "./assets/final-PPD-35s,36kph,350m,15mDrop.mp4";
 

@@ -58,6 +58,7 @@ function updateOrientationUI() {
 
 let scene, camera, renderer, effect, controls;
 let inVRMode = false; // true after user has entered VR
+let wakeLockSentinel = null;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
@@ -590,11 +591,33 @@ Object.assign(video.style, {
 
   // Keep video alive across visibility changes (PWA & Safari quirks)
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) safePlay();
+    if (!document.hidden) {
+      safePlay();
+      if (inVRMode) requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
   });
   window.addEventListener("pageshow", safePlay);
   window.addEventListener("focus", safePlay);
 
+}
+
+async function requestWakeLock() {
+  if (typeof navigator?.wakeLock?.request !== "function") return;
+  try {
+    wakeLockSentinel = await navigator.wakeLock.request("screen");
+    wakeLockSentinel.addEventListener("release", () => { wakeLockSentinel = null; });
+  } catch {}
+}
+
+function releaseWakeLock() {
+  if (wakeLockSentinel) {
+    try {
+      wakeLockSentinel.release();
+    } catch {}
+    wakeLockSentinel = null;
+  }
 }
 
 async function enterVR() {
@@ -642,6 +665,8 @@ async function enterVR() {
     ui.style.display = "none";
     inVRMode = true;
     updateOrientationUI();
+
+    await requestWakeLock();
 
     // Show "Add to Home Screen" tip only in Safari (not in PWA/standalone) and when in landscape
     const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || !!navigator.standalone;

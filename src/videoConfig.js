@@ -19,8 +19,9 @@ const R2_KEYS = {
   "base-downhill": "final-PPD-35s,36kph,350m,15mDrop.mp4",
 };
 
-const base = typeof process !== "undefined" && process.env && process.env.R2_VIDEO_BASE_URL;
-const useR2 = Boolean(base && base.trim());
+// Direct access so Parcel can replace at build time
+const base = process.env.R2_VIDEO_BASE_URL;
+const useR2 = Boolean(base && String(base).trim());
 
 function r2Url(key) {
   if (!base) return null;

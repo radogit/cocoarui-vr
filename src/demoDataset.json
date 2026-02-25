@@ -1,0 +1,24 @@
+{
+  "v": 2,
+  "nodes": [
+    {"yaw": 42, "pitch": -29.4, "size": 14.5, "color": "0000ff", "name": "1-speed", "representation": "number", "opacity": 0.6},
+    {"yaw": -6, "pitch": -56.8, "size": 14.2, "color": "808000", "name": "2-distance", "representation": "number", "opacity": 0.55},
+    {"yaw": -11.7, "pitch": -15.4, "size": 17.4, "color": "008000", "name": "3-navigation", "representation": "map", "opacity": 0.5},
+    {"yaw": 48.7, "pitch": -13.2, "size": 14.5, "color": "800080", "name": "4-speed", "representation": "number", "opacity": 0.45},
+    {"yaw": 38.2, "pitch": -54.4, "size": 12.5, "color": "ff00ff", "name": "5-time", "representation": "number", "opacity": 0.4},
+    {"yaw": 25.9, "pitch": -34.1, "size": 14, "color": "ff7f50", "name": "6-power", "representation": "linear1", "opacity": 0.35},
+    {"yaw": 9.4, "pitch": -57.7, "size": 14.2, "color": "0000ff", "name": "7-distance", "representation": "linear1", "opacity": 0.3},
+    {"yaw": -35.6, "pitch": -37.7, "size": 14, "color": "ff0000", "name": "8-heartrate", "representation": "radial", "opacity": 0.25}
+  ],
+  "settings": {
+    "bg": 1,
+    "bgPreset": "base-downhill",
+    "bgOpacity": 100,
+    "axis": 0,
+    "gridV": 0,
+    "gridH": 0,
+    "nodeCircles": 1,
+    "nodeIcon": 1,
+    "nodeLabel": 1
+  }
+}

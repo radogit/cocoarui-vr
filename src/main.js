@@ -4,6 +4,7 @@ import { iconByKey, loadIconTexture } from "./icons.js";
 import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
 import jsQR from "jsqr";
 import { BG_PRESET_VIDEOS, defaultVideoUrl, useCrossOrigin } from "./videoConfig.js";
+import demoDataset from "./demoDataset.json";
 
 const ui = document.getElementById("ui");
 const uiButtons = document.getElementById("ui-buttons");
@@ -879,6 +880,14 @@ Object.assign(video.style, {
   if (scanQrBtn) scanQrBtn.addEventListener("click", startQrScan);
   if (scanQrHudBtn) scanQrHudBtn.addEventListener("click", startQrScan);
   if (qrScannerClose) qrScannerClose.addEventListener("click", stopQrScan);
+  const qrLoadDemoBtn = document.getElementById("qr-load-demo");
+  if (qrLoadDemoBtn) qrLoadDemoBtn.addEventListener("click", () => {
+    const demoJson = JSON.stringify(demoDataset);
+    localStorage.setItem(STORAGE_KEY_QR_MARKERS, demoJson);
+    stopQrScan();
+    const { markers } = parseMarkersFromRawString(demoJson);
+    showQrScanSuccess(markers.length);
+  });
   if (qrClearStored) qrClearStored.addEventListener("click", () => {
     localStorage.removeItem(STORAGE_KEY_QR_MARKERS);
     stopQrScan();

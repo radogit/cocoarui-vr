@@ -80,8 +80,49 @@ let wakeLockSentinel = null;
 let video, visibleCanvas, visibleCtx, panoTex, sphere;
 let insideView = true; // 🔹 start inside
 let stopUpdates = false;
+
+/** Arrow-key camera control for desktop troubleshooting. Radians per frame. Read from URL params at init. */
+let arrowYawSpeed = THREE.MathUtils.degToRad(90);
+let arrowPitchSpeed = THREE.MathUtils.degToRad(90);
+const arrowKeys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+/** Accumulated arrow-key rotation (quaternion). Persists so controls.update() doesn't overwrite. */
+const arrowKeyQuat = new THREE.Quaternion();
+let lastArrowUrlUpdate = 0;
 let lastVideoTime = -1; // for detecting loop restart (ended doesn't fire when loop=true)
 const labelPlanes = []; // billboard labels, updated each frame to face camera
+
+/** Parse arrow-key params from URL: arrowYaw, arrowPitch (deg), arrowYawSpeed, arrowPitchSpeed (deg/frame). */
+function parseArrowParamsFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  const yaw = parseFloat(p.get("arrowYaw"));
+  const pitch = parseFloat(p.get("arrowPitch"));
+  const yawSpeed = parseFloat(p.get("arrowYawSpeed"));
+  const pitchSpeed = parseFloat(p.get("arrowPitchSpeed"));
+  return {
+    yaw: Number.isFinite(yaw) ? yaw : 0,
+    pitch: Number.isFinite(pitch) ? pitch : 0,
+    yawSpeed: Number.isFinite(yawSpeed) ? THREE.MathUtils.degToRad(yawSpeed) : THREE.MathUtils.degToRad(-90),
+    pitchSpeed: Number.isFinite(pitchSpeed) ? THREE.MathUtils.degToRad(pitchSpeed) : THREE.MathUtils.degToRad(-90),
+  };
+}
+
+/** Update URL with current arrow correction (throttled). */
+function updateArrowParamsInURL() {
+  const now = performance.now();
+  if (now - lastArrowUrlUpdate < 300) return;
+  lastArrowUrlUpdate = now;
+  const e = new THREE.Euler().setFromQuaternion(arrowKeyQuat, "XYZ");
+  const yawDeg = Math.round(THREE.MathUtils.radToDeg(e.y) * 10) / 10;
+  const pitchDeg = Math.round(THREE.MathUtils.radToDeg(e.x) * 10) / 10;
+  const yawSpeedDeg = Math.round(THREE.MathUtils.radToDeg(arrowYawSpeed) * 100) / 100;
+  const pitchSpeedDeg = Math.round(THREE.MathUtils.radToDeg(arrowPitchSpeed) * 100) / 100;
+  const url = new URL(window.location.href);
+  url.searchParams.set("arrowYaw", String(yawDeg));
+  url.searchParams.set("arrowPitch", String(pitchDeg));
+  url.searchParams.set("arrowYawSpeed", String(yawSpeedDeg));
+  url.searchParams.set("arrowPitchSpeed", String(pitchSpeedDeg));
+  window.history.replaceState({}, "", url);
+}
 
 /** Whether to flip the video texture left-to-right on each loop. Controlled by #flip-on-loop checkbox. */
 function getFlipOnLoop() {
@@ -689,6 +730,17 @@ async function init() {
   const { markers, settings } = parseMarkersFromURL();
   const videoSrc = BG_PRESET_VIDEOS[settings.bgPreset] ?? videoFile;
 
+  // --- Arrow-key params from URL ---
+  const arrowParams = parseArrowParamsFromURL();
+  arrowYawSpeed = arrowParams.yawSpeed;
+  arrowPitchSpeed = arrowParams.pitchSpeed;
+  arrowKeyQuat.setFromEuler(new THREE.Euler(
+    THREE.MathUtils.degToRad(arrowParams.pitch),
+    THREE.MathUtils.degToRad(arrowParams.yaw),
+    0,
+    "XYZ"
+  ));
+
   // ---------- VIDEO ----------
   video = document.createElement("video");
   video.src = videoSrc;
@@ -818,6 +870,15 @@ Object.assign(video.style, {
   // scene.add(camera);
 
   enterBtn.addEventListener("click", enterVR);
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !inVRMode && enterBtn.offsetParent !== null) {
+      const active = document.activeElement;
+      if (!active || !/^(INPUT|TEXTAREA|SELECT)$/i.test(active.tagName)) {
+        e.preventDefault();
+        enterBtn.click();
+      }
+    }
+  });
   recenterBtn.addEventListener("click", recenter);
   fullscreenBtn.addEventListener("click", goFullscreen);
   playPauseBtn.addEventListener("click", playpause);
@@ -920,6 +981,23 @@ Object.assign(video.style, {
   };
   window.addEventListener("resize", onOrientationOrResize);
   window.addEventListener("orientationchange", () => setTimeout(onOrientationOrResize, 100));
+
+  // Arrow-key camera control for desktop troubleshooting
+  const onKeyDown = (e) => {
+    if (arrowKeys.hasOwnProperty(e.key)) {
+      e.preventDefault();
+      arrowKeys[e.key] = true;
+    }
+  };
+  const onKeyUp = (e) => {
+    if (arrowKeys.hasOwnProperty(e.key)) arrowKeys[e.key] = false;
+  };
+  const clearArrowKeys = () => {
+    Object.keys(arrowKeys).forEach((k) => { arrowKeys[k] = false; });
+  };
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", clearArrowKeys);
 
 //   // 🔹 toggle inside/outside - to check whether the sphere mesh flipped
 //   window.addEventListener("keydown", (e) => {
@@ -1033,6 +1111,19 @@ async function enterVR() {
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
+  // Arrow-key camera control for desktop troubleshooting (accumulate so controls.update() doesn't overwrite)
+  const dyaw = (arrowKeys.ArrowRight ? 1 : 0) - (arrowKeys.ArrowLeft ? 1 : 0);
+  const dpitch = (arrowKeys.ArrowDown ? 1 : 0) - (arrowKeys.ArrowUp ? 1 : 0);
+  if (dyaw !== 0 || dpitch !== 0) {
+    const e = new THREE.Euler(dpitch * arrowPitchSpeed, dyaw * arrowYawSpeed, 0, "XYZ");
+    const deltaQ = new THREE.Quaternion().setFromEuler(e);
+    arrowKeyQuat.multiply(deltaQ);
+    const e2 = new THREE.Euler().setFromQuaternion(arrowKeyQuat, "XYZ");
+    e2.x = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, e2.x));
+    arrowKeyQuat.setFromEuler(e2);
+    updateArrowParamsInURL();
+  }
+  camera.quaternion.multiply(arrowKeyQuat);
   labelPlanes.forEach((p) => p.lookAt(camera.position));
 
   if (

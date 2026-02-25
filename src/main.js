@@ -3,19 +3,7 @@ import { DeviceOrientationControls } from "./controls/DeviceOrientationControls.
 import { iconByKey, loadIconTexture } from "./icons.js";
 import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
 import jsQR from "jsqr";
-import videoFile from "./assets/city_webgl.mp4";
-import VRAscentVideo from "./assets/VRAscentVideo.mp4";
-import VRDescentVideo from "./assets/VRDescentVideo.mp4";
-import PPAscentVideo from "./assets/final-PPA-70s,20kph,400m,60mRise.mp4";
-import PPDescentVideo from "./assets/final-PPD-35s,36kph,350m,15mDrop.mp4";
-
-/** Maps bgPreset key (from D3/QR) to video asset URL. */
-const BG_PRESET_VIDEOS = {
-  "vr-uphill": VRAscentVideo,
-  "vr-downhill": VRDescentVideo,
-  "base-downhill": PPDescentVideo,
-  "base-uphill": PPAscentVideo,
-};
+import { BG_PRESET_VIDEOS, defaultVideoUrl, useCrossOrigin } from "./videoConfig.js";
 
 const ui = document.getElementById("ui");
 const uiButtons = document.getElementById("ui-buttons");
@@ -728,7 +716,7 @@ async function init() {
 
   // --- Parse markers/settings early (needed for video selection) ---
   const { markers, settings } = parseMarkersFromURL();
-  const videoSrc = BG_PRESET_VIDEOS[settings.bgPreset] ?? videoFile;
+  const videoSrc = BG_PRESET_VIDEOS[settings.bgPreset] ?? defaultVideoUrl;
 
   // --- Arrow-key params from URL ---
   const arrowParams = parseArrowParamsFromURL();
@@ -743,6 +731,7 @@ async function init() {
 
   // ---------- VIDEO ----------
   video = document.createElement("video");
+  if (useCrossOrigin) video.crossOrigin = "anonymous";
   video.src = videoSrc;
   video.loop = true;
   video.muted = true;
@@ -1258,6 +1247,7 @@ function switchVideo(presetKey) {
   const src = BG_PRESET_VIDEOS[presetKey];
   if (!src || !video) return;
   lastVideoTime = -1; // reset so new video starts from default orientation
+  if (useCrossOrigin) video.crossOrigin = "anonymous";
   video.src = src;
   video.load();
   // Clear canvas so the old video doesn't persist. When the new video loads, drawFrame will resize and redraw.

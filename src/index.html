@@ -24,6 +24,7 @@
         background:#000; 
         -webkit-text-size-adjust: 100%;
         overscroll-behavior: none;
+        font-family: ui-sans-serif, system-ui, -apple-system, Arial;
     }
     html {
         touch-action: manipulation;
@@ -92,7 +93,17 @@
     }
     .hud-row-opacity { align-items:center; }
     .hud-label { color:rgba(255,255,255,.9); font-size:14px; }
-    .hud-checkbox-label { display:flex; align-items:center; gap:8px; color:rgba(255,255,255,.9); font-size:14px; cursor:pointer; }
+    .hud-checkbox-label { 
+      display:flex; 
+      align-items:center; 
+      gap:8px; 
+      color:#111; 
+      font-size:14px; 
+      cursor:pointer; 
+      background:rgba(255,255,255,.85);
+      border-radius:10px;
+      padding:6px 10px 6px 6px;
+    }
     #bg-opacity-slider { width:120px; accent-color:rgba(255,255,255,.6); }
     #hud-drawer.collapsed #hud-drawer-content {
       max-height:0; padding-top:0; padding-bottom:0; opacity:0;
@@ -264,6 +275,10 @@
   li {
     margin-bottom: 14px;
   }
+  input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
 
     </style>
   </head>
@@ -277,10 +292,10 @@
     <div id="ui">
       <div id="ui-buttons" class="panel">
         <div style="font-weight:700; font-size: 18px;">BubblesVR</div>
-        <div>Tap “Enter VR” to grant motion permissions.</div>
+        <div>Tap “Enter VR” and grant motion permissions.</div>
         <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
           <button id="enter">Enter VR</button>
-          <button id="scan-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Scan QR</button>
+          <button id="scan-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Load dataset</button>
           <button id="clear-qr" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4); display:none;">Clear dataset</button>
         </div>
       </div>
@@ -373,7 +388,7 @@
             <button id="toggle-node-icons" class="hud-toggle" title="Show/hide node icons">Icons</button>
           </div>
           <div class="hud-row">
-            <button id="playpause">Play/Pause</button>
+            <button id="playpause">⏯</button>
             <div class="video-btn-group" role="group" aria-label="Video preset">
               <button id="video-vr-uphill" class="video-btn" data-preset="vr-uphill">VR↑</button>
               <button id="video-vr-downhill" class="video-btn" data-preset="vr-downhill">VR↓</button>
@@ -382,7 +397,7 @@
             </div>
           </div>
           <div class="hud-row hud-row-opacity">
-            <label for="bg-opacity-slider" class="hud-label">BG opacity</label>
+            <label for="bg-opacity-slider" class="hud-label">Background opacity</label>
             <input type="range" id="bg-opacity-slider" min="0" max="100" value="100" title="Background video opacity">
           </div>
           <div class="hud-row hud-row-opacity">
@@ -392,7 +407,7 @@
             </label>
           </div>
           <div class="hud-row">
-            <button id="scan-qr-hud" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Scan QR</button>
+            <button id="scan-qr-hud" style="background:rgba(255,255,255,.2); color:#fff; border:1px solid rgba(255,255,255,.4);">Load dataset</button>
           </div>
         </div>
       </div>

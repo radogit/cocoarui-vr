@@ -288,7 +288,7 @@ function parseMarkersFromURL() {
 
 /**
  * Create a text label as a billboard plane, scaled to fit within a circle of given radius.
- * Positioned in front of the sphere (between camera and sphere surface) so it's visible.
+ * Positioned in front of the icon (between camera and icon) so it sits proud of the node.
  */
 function createLabelMesh(text, radius, position, distance) {
   const size = 256;
@@ -325,7 +325,9 @@ function createLabelMesh(text, radius, position, distance) {
   const side = radius * 1.2;
   const geom = new THREE.PlaneGeometry(side, side);
   const plane = new THREE.Mesh(geom, mat);
-  const frontDist = Math.max(0.1, distance - radius - 0.02);
+  const iconOffset = Math.max(2, radius * 0.15);
+  const labelProudOfIcon = 2;
+  const frontDist = Math.max(0.1, distance - radius - iconOffset - labelProudOfIcon);
   plane.position.copy(position).multiplyScalar(frontDist / distance);
   labelPlanes.push(plane);
   return plane;
@@ -333,6 +335,7 @@ function createLabelMesh(text, radius, position, distance) {
 
 /**
  * Create an icon plane (billboard) in front of the sphere. Uses loaded texture.
+ * Offset from sphere surface to avoid z-fighting (representations sit proud of the sphere).
  */
 function createIconPlane(texture, radius, position, distance) {
   const mat = new THREE.MeshBasicMaterial({
@@ -346,7 +349,8 @@ function createIconPlane(texture, radius, position, distance) {
   const iconSize = radius * 1.4;
   const geom = new THREE.PlaneGeometry(iconSize, iconSize);
   const plane = new THREE.Mesh(geom, mat);
-  const frontDist = Math.max(0.1, distance - radius - 0.02);
+  const offset = Math.max(2, radius * 0.15);
+  const frontDist = Math.max(0.1, distance - radius - offset);
   plane.position.copy(position).multiplyScalar(frontDist / distance);
   labelPlanes.push(plane);
   return plane;

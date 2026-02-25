@@ -894,7 +894,6 @@ Object.assign(video.style, {
   if (addToHomescreenTipClose) {
     addToHomescreenTipClose.addEventListener("click", () => {
       addToHomescreenTip?.classList.remove("visible");
-      sessionStorage.setItem("addToHomescreenTipDismissed", "1");
     });
   }
   if (hudDrawerHandle && hudDrawer) {
@@ -1082,10 +1081,9 @@ async function enterVR() {
 
     await requestWakeLock();
 
-    // Show "Add to Home Screen" tip only in Safari (not in PWA/standalone) and when in landscape
+    // Show "Add to Home Screen" tip only when not in PWA/standalone and when in landscape
     const isStandalone = window.matchMedia?.("(display-mode: standalone)")?.matches || !!navigator.standalone;
-    const tipDismissed = sessionStorage.getItem("addToHomescreenTipDismissed");
-    if (addToHomescreenTip && !isStandalone && !tipDismissed && isLandscape()) {
+    if (addToHomescreenTip && !isStandalone && isLandscape()) {
       addToHomescreenTip.classList.add("visible");
     }
 

@@ -33,19 +33,21 @@ function r2Url(key) {
 /** Default/fallback video URL. */
 export const defaultVideoUrl = useR2 ? r2Url("default") : videoFile;
 
-/** Maps bgPreset key (from D3/QR) to video URL. */
+/** Maps bgPreset key (from D3/QR) to video URL. "none" = no video. */
 export const BG_PRESET_VIDEOS = useR2
   ? {
       "vr-uphill": r2Url("vr-uphill"),
       "vr-downhill": r2Url("vr-downhill"),
       "base-downhill": r2Url("base-downhill"),
       "base-uphill": r2Url("base-uphill"),
+      "none": null,
     }
   : {
       "vr-uphill": VRAscentVideo,
       "vr-downhill": VRDescentVideo,
       "base-downhill": PPDescentVideo,
       "base-uphill": PPAscentVideo,
+      "none": null,
     };
 
 /** True when using cross-origin (R2) URLs. Set video.crossOrigin = "anonymous" before src. */

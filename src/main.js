@@ -78,6 +78,8 @@ const arrowKeys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRig
 const arrowKeyQuat = new THREE.Quaternion();
 let lastArrowUrlUpdate = 0;
 let lastVideoTime = -1; // for detecting loop restart (ended doesn't fire when loop=true)
+/** Parsed settings from URL/QR, used by switchVideo and HUD. */
+let appSettings = null;
 const labelPlanes = []; // billboard labels, updated each frame to face camera
 
 /** Parse arrow-key params from URL: arrowYaw, arrowPitch (deg), arrowYawSpeed, arrowPitchSpeed (deg/frame). */
@@ -525,7 +527,7 @@ function createTickStripe(yaw, pitch, dist, axisType, stripeLength = 1.5) {
 
 /** Create grid lines every 10° from -90 to +90. Returns { group, gridVGroup, gridHGroup } for independent visibility toggling. */
 function createGridLines() {
-  const dist = 450;
+  const dist = 600; // further than axis (450) so grid draws behind
   const steps = 36;
   const lineMat = new THREE.LineBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.7 });
   const group = new THREE.Group();
@@ -554,7 +556,7 @@ function createGridLines() {
 
 /** Create axis lines (-90 to 90 yaw and pitch) with tick stripes every 20°. Always returns a group; visibility set by caller. */
 function createAxisLines() {
-  const dist = 600; // inside video sphere (radius 500)
+  const dist = 450; // closer than grid (600) so axis draws in front
   const steps = 36; // points per line
   const tickValues = [-80, -60, -40, -20, 20, 40, 60, 80];
   const labelOffset = 3; // degrees to place label below/left of tick
@@ -717,7 +719,10 @@ async function init() {
 
   // --- Parse markers/settings early (needed for video selection) ---
   const { markers, settings } = parseMarkersFromURL();
-  const videoSrc = BG_PRESET_VIDEOS[settings.bgPreset] ?? defaultVideoUrl;
+  appSettings = settings;
+  // When bg=0 (no background from QR), use "none" preset
+  if ((settings.bg ?? 1) === 0) settings.bgPreset = "none";
+  const videoSrc = settings.bgPreset === "none" ? null : (BG_PRESET_VIDEOS[settings.bgPreset] ?? defaultVideoUrl);
 
   // --- Arrow-key params from URL ---
   const arrowParams = parseArrowParamsFromURL();
@@ -732,8 +737,10 @@ async function init() {
 
   // ---------- VIDEO ----------
   video = document.createElement("video");
-  if (useCrossOrigin) video.crossOrigin = "anonymous";
-  video.src = videoSrc;
+  if (videoSrc) {
+    if (useCrossOrigin) video.crossOrigin = "anonymous";
+    video.src = videoSrc;
+  }
   video.loop = true;
   video.muted = true;
   video.playsInline = true;
@@ -790,14 +797,14 @@ Object.assign(video.style, {
   axisGroup = createAxisLines();
   axisGroup.renderOrder = 2;
   axisGroup.visible = (settings.axis ?? 0) === 1;
-  scene.add(axisGroup);
   const { group: gridGroup, gridVGroup: gV, gridHGroup: gH } = createGridLines();
   gridVGroup = gV;
   gridHGroup = gH;
-  gridGroup.renderOrder = 2;
+  gridGroup.renderOrder = 1;
   gridVGroup.visible = (settings.gridV ?? 0) === 1;
   gridHGroup.visible = (settings.gridH ?? 0) === 1;
   scene.add(gridGroup);
+  scene.add(axisGroup);
 
   scene.add(sphere);
 
@@ -822,7 +829,7 @@ Object.assign(video.style, {
   }
   // Apply settings: background sphere visibility and opacity
   if (sphere && sphere.material) {
-    sphere.visible = (settings.bg ?? 1) === 1;
+    sphere.visible = (settings.bg ?? 1) === 1 && settings.bgPreset !== "none";
     const bgOpacity = Math.max(0, Math.min(1, (settings.bgOpacity ?? 100) / 100));
     sphere.material.transparent = true; // always allow opacity changes for slider
     sphere.material.opacity = bgOpacity;
@@ -1251,8 +1258,21 @@ function playpause() {
 }
 
 function switchVideo(presetKey) {
+  if (!video) return;
+  if (presetKey === "none") {
+    if (appSettings) appSettings.bgPreset = "none";
+    video.src = "";
+    video.pause();
+    if (sphere) sphere.visible = false;
+    document.querySelectorAll(".video-btn").forEach((btn) => {
+      btn.style.fontWeight = btn.dataset.preset === "none" ? "bold" : "";
+    });
+    return;
+  }
   const src = BG_PRESET_VIDEOS[presetKey];
-  if (!src || !video) return;
+  if (!src) return;
+  if (appSettings) appSettings.bgPreset = presetKey;
+  if (sphere) sphere.visible = (appSettings?.bg ?? 1) === 1;
   lastVideoTime = -1; // reset so new video starts from default orientation
   if (useCrossOrigin) video.crossOrigin = "anonymous";
   video.src = src;

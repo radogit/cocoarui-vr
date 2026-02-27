@@ -130,9 +130,10 @@ const VIDEO_SPHERE_RADIUS = 500;
  * D3 simulation mapping (scaleUnit = minDim/180, 1 data unit = 1 degree):
  *   - yaw = node.x (degrees, longitude)
  *   - pitch = node.y (degrees, latitude; D3 y-down, VR y-up — layout export flips)
- *   - size = angular diameter in degrees = 2 * node.radius
+ *   - size = angular diameter in degrees = 2 * node.radius (visual field; sphere uses sin(θ/2))
  *   - exportMetricsCSV outputs: x, y, diameter (use diameter as size)
  *   - exportLayoutJSON hotspots: width/height = side = r*sqrt(π); angular diameter = 2*side/sqrt(π)
+ * Grid: 10° cells. Icons/labels: inscribed in circle, perspective-corrected for depth.
  *
  * Distance: optional, last. Controls depth when spheres overlap at same yaw/pitch (closer = foreground).
  *
@@ -321,6 +322,7 @@ function parseMarkersFromURL() {
 /**
  * Create a text label as a billboard plane, scaled to fit within a circle of given radius.
  * Positioned in front of the icon (between camera and icon) so it sits proud of the node.
+ * Perspective correction: label is closer than sphere, so scale down for correct apparent size.
  */
 function createLabelMesh(text, radius, position, distance) {
   const size = 256;
@@ -354,12 +356,13 @@ function createLabelMesh(text, radius, position, distance) {
     depthTest: true,
     depthWrite: true,
   });
-  const side = radius * 1.2;
-  const geom = new THREE.PlaneGeometry(side, side);
-  const plane = new THREE.Mesh(geom, mat);
   const iconOffset = Math.max(2, radius * 0.15);
   const labelProudOfIcon = 2;
   const frontDist = Math.max(0.1, distance - radius - iconOffset - labelProudOfIcon);
+  const baseSide = radius * 1.2;
+  const side = baseSide * (frontDist / distance); // perspective correction
+  const geom = new THREE.PlaneGeometry(side, side);
+  const plane = new THREE.Mesh(geom, mat);
   plane.position.copy(position).multiplyScalar(frontDist / distance);
   labelPlanes.push(plane);
   return plane;
@@ -368,6 +371,8 @@ function createLabelMesh(text, radius, position, distance) {
 /**
  * Create an icon plane (billboard) in front of the sphere. Uses loaded texture.
  * Offset from sphere surface to avoid z-fighting (representations sit proud of the sphere).
+ * Icon square is inscribed in the circle: angular diagonal = sphere's angular diameter 2*asin(R/D).
+ * Use angular extent directly: iconSize/frontDist = 2*asin(R/D), so iconSize = sqrt(2)*frontDist*asin(R/D).
  */
 function createIconPlane(texture, radius, position, distance) {
   const mat = new THREE.MeshBasicMaterial({
@@ -378,11 +383,12 @@ function createIconPlane(texture, radius, position, distance) {
     depthTest: true,
     depthWrite: true,
   });
-  const iconSize = radius * 1.4;
-  const geom = new THREE.PlaneGeometry(iconSize, iconSize);
-  const plane = new THREE.Mesh(geom, mat);
   const offset = Math.max(2, radius * 0.15);
   const frontDist = Math.max(0.1, distance - radius - offset);
+  const angularRadiusRad = Math.asin(radius / distance); // sphere's angular radius
+  const iconSize = Math.SQRT2 * frontDist * angularRadiusRad; // inscribed: angular diagonal = 2*angularRadiusRad
+  const geom = new THREE.PlaneGeometry(iconSize, iconSize);
+  const plane = new THREE.Mesh(geom, mat);
   plane.position.copy(position).multiplyScalar(frontDist / distance);
   labelPlanes.push(plane);
   return plane;
@@ -417,8 +423,10 @@ async function createMarkerSphere({ yaw, pitch, size, distance = 400, color = 0x
   const cappedDist = Math.min(distance, VIDEO_SPHERE_RADIUS - 1);
   const azimuth = THREE.MathUtils.degToRad(yaw);
   const elevation = THREE.MathUtils.degToRad(pitch);
+  // size = angular diameter in degrees (visual field). For a 3D sphere: α = 2·arcsin(R/D), so R = D·sin(θ/2).
+  // (tan is for a flat disk; sin is correct for a sphere viewed from its center direction.)
   const angularRadiusRad = THREE.MathUtils.degToRad(size) / 2;
-  const radius = cappedDist * Math.tan(angularRadiusRad);
+  const radius = cappedDist * Math.sin(angularRadiusRad);
   const pos = new THREE.Vector3(
     Math.sin(azimuth) * Math.cos(elevation) * cappedDist,
     Math.sin(elevation) * cappedDist,
@@ -525,7 +533,8 @@ function createTickStripe(yaw, pitch, dist, axisType, stripeLength = 1.5) {
   return new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0x000000 }));
 }
 
-/** Create grid lines every 10° from -90 to +90. Returns { group, gridVGroup, gridHGroup } for independent visibility toggling. */
+/** Create grid lines every 10° from -90 to +90. Angular degrees; each cell spans 10° of visual field.
+ * Returns { group, gridVGroup, gridHGroup } for independent visibility toggling. */
 function createGridLines() {
   const dist = 600; // further than axis (450) so grid draws behind
   const steps = 36;

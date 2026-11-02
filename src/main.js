@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { DeviceOrientationControls } from "./controls/DeviceOrientationControls.js";
 import { iconByKey, loadIconTexture } from "./icons.js";
-import { StereoEffect } from "three/examples/jsm/effects/StereoEffect.js";
+import { CardboardStereoEffect } from "./effects/CardboardStereoEffect.js";
 import jsQR from "jsqr";
 import { BG_PRESET_VIDEOS, defaultVideoUrl, useCrossOrigin } from "./videoConfig.js";
 import demoDataset from "./demoDataset.json";
@@ -32,10 +32,13 @@ const toggleNodeIconsBtn = document.getElementById("toggle-node-icons");
 const hudDrawer = document.getElementById("hud-drawer");
 const hudDrawerHandle = document.getElementById("hud-drawer-handle");
 const bgOpacitySlider = document.getElementById("bg-opacity-slider");
+const lensDistanceSlider = document.getElementById("lens-distance-slider");
+const lensDistanceValue = document.getElementById("lens-distance-value");
 
 const appRoot = document.getElementById('app-root');
 
 const STORAGE_KEY_QR_MARKERS = "qr_scanned_markers";
+const STORAGE_KEY_LENS_DISTANCE = "lens_distance_pct";
 
 function isLandscape() {
   return typeof window !== "undefined" && window.innerWidth > window.innerHeight;
@@ -723,8 +726,9 @@ async function init() {
   renderer.domElement.style.touchAction = "none"; // prevent pull-to-refresh
 
 
-  effect = new StereoEffect(renderer);
+  effect = new CardboardStereoEffect(renderer);
   effect.setSize(window.innerWidth, window.innerHeight);
+  initLensDistanceSlider();
 
   // --- Parse markers/settings early (needed for video selection) ---
   const { markers, settings } = parseMarkersFromURL();
@@ -1238,6 +1242,34 @@ function stopTextureUpdates() {
 }
 
 
+
+/**
+ * Lens distance: distance between the two eye-image centres, as % of screen width.
+ * 50% = classic half-and-half split. Lower it for viewers whose lenses are closer
+ * together than half the phone width (e.g. fixed-lens cardboard viewers on large phones).
+ * Saved per device in localStorage.
+ */
+function initLensDistanceSlider() {
+  let pct = 50;
+  try {
+    const saved = Number(localStorage.getItem(STORAGE_KEY_LENS_DISTANCE));
+    if (saved >= 30 && saved <= 60) pct = saved;
+  } catch (_) { /* storage unavailable */ }
+
+  const apply = (value) => {
+    effect.setLensSeparation(value / 100);
+    if (lensDistanceValue) lensDistanceValue.textContent = `${value}%`;
+  };
+  apply(pct);
+
+  if (!lensDistanceSlider) return;
+  lensDistanceSlider.value = String(pct);
+  lensDistanceSlider.addEventListener("input", () => {
+    const value = Math.max(30, Math.min(60, Number(lensDistanceSlider.value)));
+    apply(value);
+    try { localStorage.setItem(STORAGE_KEY_LENS_DISTANCE, String(value)); } catch (_) { /* ignore */ }
+  });
+}
 
 function onResize() {
   const w = window.innerWidth;

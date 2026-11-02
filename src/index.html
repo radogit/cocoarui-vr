@@ -141,6 +141,11 @@
             <input type="range" id="bg-opacity-slider" min="0" max="100" value="100" title="Background video opacity">
           </div>
           <div class="hud-row hud-row-opacity">
+            <label for="lens-distance-slider" class="hud-label">Lens distance</label>
+            <input type="range" id="lens-distance-slider" min="30" max="60" step="1" value="50" title="Distance between the two eye images (% of screen width). Lower it if you see double in a fixed-lens viewer.">
+            <span id="lens-distance-value" class="hud-label">50%</span>
+          </div>
+          <div class="hud-row hud-row-opacity">
             <label for="flip-on-loop" class="hud-checkbox-label">
               <input type="checkbox" id="flip-on-loop" checked>
               Mirror video on loop

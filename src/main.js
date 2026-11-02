@@ -503,8 +503,8 @@ function createAxisTickLabel(text, yaw, pitch, distance, offsetYaw = 0, offsetPi
   ctx.font = "normal 180px sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "black";
-  ctx.strokeStyle = "white";
+  ctx.fillStyle = "white";
+  ctx.strokeStyle = "black"; // thin dark outline keeps white text legible on light video
   ctx.lineWidth = 3;
   ctx.strokeText(text, size / 2, size / 2);
   ctx.fillText(text, size / 2, size / 2);
@@ -526,6 +526,25 @@ function createAxisTickLabel(text, yaw, pitch, distance, offsetYaw = 0, offsetPi
   return plane;
 }
 
+/** Axis line appearance. Thickness is angular (degrees of visual field), so it looks the same at any distance. */
+const AXIS_COLOR = 0xffffff;
+const AXIS_OPACITY = 0.9;
+const AXIS_THICKNESS_DEG = 0.3;
+const axisMaterial = new THREE.MeshBasicMaterial({ color: AXIS_COLOR, transparent: true, opacity: AXIS_OPACITY });
+
+/**
+ * Thick line through the given points, drawn as a thin tube (WebGL ignores LineBasicMaterial.linewidth,
+ * so GL lines are always 1px). Tube diameter subtends AXIS_THICKNESS_DEG at the given distance.
+ */
+function createThickLine(points, dist) {
+  const radius = dist * Math.tan(THREE.MathUtils.degToRad(AXIS_THICKNESS_DEG) / 2);
+  const curve = points.length === 2
+    ? new THREE.LineCurve3(points[0], points[1])
+    : new THREE.CatmullRomCurve3(points);
+  const segments = points.length === 2 ? 1 : (points.length - 1) * 4;
+  return new THREE.Mesh(new THREE.TubeGeometry(curve, segments, radius, 8, false), axisMaterial);
+}
+
 /** X-axis tick: stripe below axis (pitch -1.5 to 0). Y-axis tick: stripe left of axis (yaw -1.5 to 0). */
 function createTickStripe(yaw, pitch, dist, axisType, stripeLength = 1.5) {
   const p1 = axisType === "x"
@@ -534,8 +553,7 @@ function createTickStripe(yaw, pitch, dist, axisType, stripeLength = 1.5) {
   const p2 = axisType === "x"
     ? yawPitchToPosition(yaw, pitch, dist)
     : yawPitchToPosition(yaw, pitch, dist);
-  const geom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-  return new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0x000000 }));
+  return createThickLine([p1, p2], dist);
 }
 
 /** Create grid lines every 10° from -90 to +90. Angular degrees; each cell spans 10° of visual field.
@@ -584,12 +602,9 @@ function createAxisLines() {
     const pitch = -90 + (180 * i) / steps;
     vertPoints.push(yawPitchToPosition(0, pitch, dist));
   }
-  const horizGeom = new THREE.BufferGeometry().setFromPoints(horizPoints);
-  const vertGeom = new THREE.BufferGeometry().setFromPoints(vertPoints);
-  const lineMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.9 });
   const group = new THREE.Group();
-  const horizLine = new THREE.Line(horizGeom, lineMat);
-  const vertLine = new THREE.Line(vertGeom, lineMat);
+  const horizLine = createThickLine(horizPoints, dist);
+  const vertLine = createThickLine(vertPoints, dist);
   horizLine.renderOrder = 1;
   vertLine.renderOrder = 1;
   group.add(horizLine);

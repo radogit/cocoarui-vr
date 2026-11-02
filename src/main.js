@@ -39,6 +39,8 @@ const appRoot = document.getElementById('app-root');
 
 const STORAGE_KEY_QR_MARKERS = "qr_scanned_markers";
 const STORAGE_KEY_LENS_DISTANCE = "lens_distance_pct";
+/** Colour of the side bars shown when Lens distance is not 50% (any CSS/three.js colour). */
+const STEREO_BAR_COLOR = "#000000";
 
 function isLandscape() {
   return typeof window !== "undefined" && window.innerWidth > window.innerHeight;
@@ -727,6 +729,7 @@ async function init() {
 
 
   effect = new CardboardStereoEffect(renderer);
+  effect.setBarColor(STEREO_BAR_COLOR);
   effect.setSize(window.innerWidth, window.innerHeight);
   initLensDistanceSlider();
 

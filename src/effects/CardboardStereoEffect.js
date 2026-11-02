@@ -1,4 +1,4 @@
-import { StereoCamera, Vector2 } from "three";
+import { Color, StereoCamera, Vector2 } from "three";
 
 /**
  * Side-by-side stereo renderer with adjustable lens distance.
@@ -11,7 +11,7 @@ import { StereoCamera, Vector2 } from "three";
  * Here the distance between the two image centres is configurable as a fraction
  * of the screen width (0.5 = identical to StereoEffect). Each eye viewport is as
  * wide as it can be without overlapping the other eye or leaving the screen;
- * the remaining area is cleared to black.
+ * the remaining area (side bars) is filled with a configurable colour (default black).
  */
 export class CardboardStereoEffect {
   constructor(renderer) {
@@ -19,6 +19,13 @@ export class CardboardStereoEffect {
     this.stereo = new StereoCamera();
     this.lensSeparation = 0.5; // fraction of screen width between image centres
     this._size = new Vector2();
+    this.barColor = new Color(0x000000);
+    this._savedClearColor = new Color();
+  }
+
+  /** Colour of the bars outside the eye viewports (any THREE.Color input, e.g. 0x000000 or "#222"). */
+  setBarColor(color) {
+    this.barColor.set(color);
   }
 
   setEyeSeparation(eyeSep) {
@@ -57,7 +64,13 @@ export class CardboardStereoEffect {
     renderer.autoClear = false;
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, w, h);
-    renderer.clear(); // black bars around the eye viewports
+    // Set the clear colour explicitly: when scene.background is a Color, three.js
+    // leaves the renderer's clear colour set to it after every render.
+    renderer.getClearColor(this._savedClearColor);
+    const savedClearAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(this.barColor, 1);
+    renderer.clear(); // bars around the eye viewports
+    renderer.setClearColor(this._savedClearColor, savedClearAlpha);
 
     renderer.setScissorTest(true);
     renderer.setScissor(leftX, 0, vw, h);

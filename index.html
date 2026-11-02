@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang=en><script type=importmap>{"imports":{"32et1":"./icon_navigation.f1b465d1.svg","5uvW8":"./icon_01.c1eea898.svg","64D2A":"./VRDescentVideo.e78b0fc0.mp4","67Wmf":"./icon_map.cd829277.svg","6ZwbV":"./icon_03.830fd332.svg","9JQU6":"./icon_02.f257e862.svg","QE4xA":"./icon_number.41efdcf4.svg","besO1":"./final-PPA-70s,20kph,400m,60mRise.e8e0429a.mp4","cu87k":"./icon_count.53af4176.svg","dVPRj":"./icon_text.f4d2108b.svg","dfR8q":"./icon_radial.0046d50b.svg","e2HaE":"./icon_fill.70ffe444.svg","eH7x7":"./icon_linear2.8f6e2ee9.svg","eMCM2":"./icon_sound.cd728603.svg","fOG9M":"./final-PPD-35s,36kph,350m,15mDrop.2c2ad6cf.mp4","gJbGU":"./icon_graph.faab306a.svg","ht33p":"./city_webgl.aee93e37.mp4","iUKsw":"./icon_linear1.93c7ce8e.svg","j0usJ":"./icon_symbol.58f4f19f.svg","j8GWb":"./icon_04.c3ca6339.svg","jvqaI":"./VRAscentVideo.1c1589f8.mp4"}}</script><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"><meta name=apple-mobile-web-app-capable content=yes><meta name=apple-mobile-web-app-status-bar-style content=black-translucent><meta name=apple-mobile-web-app-orientation content=landscape><meta name=mobile-web-app-capable content=yes><meta name=theme-color content=#000000><meta name=apple-mobile-web-app-title content="Bubbles VR"><meta name=format-detection content="telephone=no"><meta name=apple-touch-fullscreen content=yes><link rel=manifest href=up_/manifest.webmanifest><link rel=stylesheet href=CardboardVR_experiment.8c882b89.css><title>BubblesVR</title><body>
+<!DOCTYPE html><html lang=en><script type=importmap>{"imports":{"32et1":"./icon_navigation.f1b465d1.svg","5uvW8":"./icon_01.c1eea898.svg","64D2A":"./VRDescentVideo.e78b0fc0.mp4","67Wmf":"./icon_map.cd829277.svg","6ZwbV":"./icon_03.830fd332.svg","9JQU6":"./icon_02.f257e862.svg","QE4xA":"./icon_number.41efdcf4.svg","besO1":"./final-PPA-70s,20kph,400m,60mRise.e8e0429a.mp4","cu87k":"./icon_count.53af4176.svg","dVPRj":"./icon_text.f4d2108b.svg","dfR8q":"./icon_radial.0046d50b.svg","e2HaE":"./icon_fill.70ffe444.svg","eH7x7":"./icon_linear2.8f6e2ee9.svg","eMCM2":"./icon_sound.cd728603.svg","fOG9M":"./final-PPD-35s,36kph,350m,15mDrop.2c2ad6cf.mp4","gJbGU":"./icon_graph.faab306a.svg","ht33p":"./city_webgl.aee93e37.mp4","iUKsw":"./icon_linear1.93c7ce8e.svg","j0usJ":"./icon_symbol.58f4f19f.svg","j8GWb":"./icon_04.c3ca6339.svg","jvqaI":"./VRAscentVideo.1c1589f8.mp4"}}</script><meta charset=utf-8><meta name=viewport content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"><meta name=apple-mobile-web-app-capable content=yes><meta name=apple-mobile-web-app-status-bar-style content=black-translucent><meta name=apple-mobile-web-app-orientation content=landscape><meta name=mobile-web-app-capable content=yes><meta name=theme-color content=#000000><meta name=apple-mobile-web-app-title content="Bubbles VR"><meta name=format-detection content="telephone=no"><meta name=apple-touch-fullscreen content=yes><link rel=manifest href=up_/manifest.webmanifest><link rel=stylesheet href=CardboardVR_experiment.36ed99f9.css><title>BubblesVR</title><body>
 
     <div id=app-root>
         
@@ -95,6 +95,11 @@
             <input type=range id=bg-opacity-slider min=0 max=100 value=100 title="Background video opacity">
           </div>
           <div class="hud-row hud-row-opacity">
+            <label for=lens-distance-slider class=hud-label>Lens distance</label>
+            <input type=range id=lens-distance-slider min=30 max=60 step=1 value=50 title="Distance between the two eye images (% of screen width). Lower it if you see double in a fixed-lens viewer.">
+            <span id=lens-distance-value class=hud-label>50%</span>
+          </div>
+          <div class="hud-row hud-row-opacity">
             <label for=flip-on-loop class=hud-checkbox-label>
               <input type=checkbox id=flip-on-loop checked>
               Mirror video on loop
@@ -107,6 +112,6 @@
       </div>
     </div>
 
-    <script type=module src=CardboardVR_experiment.b5812f2f.js></script>
+    <script type=module src=CardboardVR_experiment.68530964.js></script>
   
 
